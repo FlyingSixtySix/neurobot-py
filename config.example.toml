@@ -1,0 +1,6 @@
+[bot]
+token = ""
+guilds = []
+
+[reactions]
+silent = false
