@@ -4,3 +4,11 @@ guilds = []
 
 [reactions]
 silent = false
+
+[jp]
+target_channel = 112233445566778899
+output_channel = 112233445566778899
+deepl_api_key = ""
+
+[swarm]
+target_channel = 112233445566778899

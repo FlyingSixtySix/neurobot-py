@@ -4,6 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+py-cord = "2.4.1"
+loguru = "0.7.0"
+requests = "2.31.0"
 
 [dev-packages]
 

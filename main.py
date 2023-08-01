@@ -10,6 +10,7 @@ with open('config.toml', 'rb') as file:
 intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
+intents.message_content = True
 intents.guilds = True
 intents.reactions = True
 

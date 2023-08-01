@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 from loguru import logger
 
-from main import bot, config
+from main import config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
 silent = config['reactions']['silent']
@@ -78,10 +78,11 @@ class Reactions(commands.Cog):
                 VALUES (?, ?, ?, ?)
             ''', (guild_id, 'Country Flags', r'[\U0001F1E6-\U0001F1FF]', 1))
         self.con.commit()
+        cur.close()
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        message = await bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
+        message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
         emoji = str(payload.emoji)
         reactions_of_type = [r for r in message.reactions if str(r.emoji) == emoji]
         removed = 0
