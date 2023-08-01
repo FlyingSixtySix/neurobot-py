@@ -80,6 +80,8 @@ class Reactions(commands.Cog):
         self.con.commit()
         cur.close()
 
+    reactions = discord.SlashCommandGroup('reactions', description='Reaction group management', guild_ids=command_guild_ids)
+
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
@@ -162,6 +164,8 @@ class Reactions(commands.Cog):
     def _format_reaction_group(self, name: str, match: str, match_type: str, enabled: bool, builtin: bool):
         return f'Name: `{name}`\nMatch: `{match}`\nEnabled: {"Yes" if enabled else "No"}\nBuilt-in: {"Yes" if builtin else "No"}\nType: `{self._int_to_match_type(match_type)}`'
     
+    @reactions.command()
+    @commands.has_permissions(manage_messages=True)
     async def list(self, ctx: discord.ApplicationContext):
         """
         Slash command action to list reaction groups.
@@ -179,6 +183,8 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(self._format_reaction_groups(names), ephemeral=silent)
 
+    @reactions.command()
+    @commands.has_permissions(manage_messages=True)
     async def info(self, ctx: discord.ApplicationContext, name: str):
         """
         Slash command action to view information about a reaction group.
@@ -197,6 +203,8 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(self._format_reaction_group(match[0], match[1], match[2], match[3], match[4]), ephemeral=silent)
 
+    @reactions.command()
+    @commands.has_permissions(manage_messages=True)
     async def enable(self, ctx: discord.ApplicationContext, name: str):
         """
         Slash command action to enable a reaction group.
@@ -210,6 +218,8 @@ class Reactions(commands.Cog):
         self.con.commit()
         await ctx.respond(f'Reaction group `{name}` enabled.', ephemeral=silent)
 
+    @reactions.command()
+    @commands.has_permissions(manage_messages=True)
     async def disable(self, ctx: discord.ApplicationContext, name: str):
         """
         Slash command action to disable a reaction group.
@@ -223,6 +233,8 @@ class Reactions(commands.Cog):
         self.con.commit()
         await ctx.respond(f'Reaction group `{name}` disabled.', ephemeral=silent)
 
+    @reactions.command()
+    @commands.has_permissions(manage_messages=True)
     async def add(self, ctx: discord.ApplicationContext, name: str, match: str, match_type: str):
         """
         Slash command action to add a reaction group.
@@ -248,6 +260,8 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(f'Reaction group `{name}` added with match `{match}`.', ephemeral=silent)
 
+    @reactions.command()
+    @commands.has_permissions(manage_messages=True)
     async def edit(self, ctx: discord.ApplicationContext, name: str, match: str, match_type: str):
         """
         Slash command action to edit a reaction group.
@@ -277,6 +291,8 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(f'Reaction group `{name}` edited with new match `{match}`.', ephemeral=silent)
 
+    @reactions.command()
+    @commands.has_permissions(manage_messages=True)
     async def remove(self, ctx: discord.ApplicationContext, name: str):
         """
         Slash command action to remove a reaction group.
@@ -304,32 +320,6 @@ class Reactions(commands.Cog):
         self.con.commit()
         cur.close()
         await ctx.respond(f'Reaction group `{name}` removed.', ephemeral=silent)
-
-    @commands.slash_command(guild_ids=command_guild_ids)
-    @commands.has_permissions(manage_messages=True)
-    async def reactiongroups(self,
-                        ctx: discord.ApplicationContext,
-                        action: discord.Option(str, choices=['list', 'info', 'enable', 'disable', 'add', 'edit', 'remove']),
-                        name: discord.Option(str, required=False, autocomplete=discord.utils.basic_autocomplete(get_group_names)),
-                        match: discord.Option(str, required=False, help='The regex to match against, only used for add/remove'),
-                        match_type: discord.Option(str, choices=['substring', 'exact'], required=False, default='substring')):
-        if action == 'list':
-            await self.list(ctx)
-        elif action == 'info':
-            await self.info(ctx, name)
-        elif action == 'enable':
-            await self.enable(ctx, name)
-        elif action == 'disable':
-            await self.disable(ctx, name)
-        elif action == 'add':
-            await self.add(ctx, name, match, match_type)
-        elif action == 'edit':
-            await self.edit(ctx, name, match, match_type)
-        elif action == 'remove':
-            await self.remove(ctx, name)
-        else:
-            await ctx.respond('Invalid subcommand', ephemeral=True)
-        
 
 
 def setup(bot: commands.Bot):
