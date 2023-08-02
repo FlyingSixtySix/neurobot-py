@@ -1,8 +1,7 @@
 import discord
 from discord.ext import commands
-from loguru import logger
 
-from main import bot, config
+from main import config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
 

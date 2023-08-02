@@ -6,7 +6,7 @@ from discord.ext import commands
 from loguru import logger
 import requests
 
-from main import bot, config
+from main import config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
 deepl_api_key = config['jp']['deepl_api_key']
