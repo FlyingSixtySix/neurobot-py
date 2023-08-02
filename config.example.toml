@@ -1,6 +1,10 @@
 [bot]
 token = ""
 guilds = [112233445566778899]
+log_level = "INFO"
+
+[manage]
+silent = false
 
 [reactions]
 silent = false
