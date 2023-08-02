@@ -28,10 +28,10 @@ class Swarm(commands.Cog):
             if self.last_sticker == message.stickers[0]:
                 self.count += 1
                 if self.count % 5 == 0:
-                    await message.channel.send(f'{self.last_sticker.name} has a streak of {self.count}!')
+                    await message.channel.send(f'{self.last_sticker.name} has a streak of {self.count}!', allowed_mentions=discord.AllowedMentions.none())
             else:
                 if self.count >= 5:
-                    await message.channel.send(f'{message.author.mention} broke {self.last_sticker.name} streak of {self.count}!')
+                    await message.channel.send(f'{message.author.mention} broke {self.last_sticker.name} streak of {self.count}!', allowed_mentions=discord.AllowedMentions.none())
                 self.last_sticker = message.stickers[0]
                 self.count = 1
 
