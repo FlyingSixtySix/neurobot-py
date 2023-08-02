@@ -13,6 +13,9 @@ class Swarm(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if message.type == discord.MessageType.application_command:
+            return
+        
         server_config = config['swarm'][str(message.guild.id)]
         target_channel_id = int(server_config['target_channel'])
 

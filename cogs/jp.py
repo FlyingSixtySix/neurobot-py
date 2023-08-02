@@ -17,6 +17,9 @@ class JP(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if message.type == discord.MessageType.application_command:
+            return
+        
         server_config = config['jp'][str(message.guild.id)]
         target_channel_id = int(server_config['target_channel'])
         output_channel_id = int(server_config['output_channel'])
@@ -58,7 +61,7 @@ class JP(commands.Cog):
             timestamp=message.created_at
         )
 
-        name = message.author.name + '#' + message.author.discriminator
+        name = message.author.name + ('#' + message.author.discriminator if message.author.discriminator != '0' else '')
         embed.set_author(name=name, icon_url=message.author.display_avatar.url)
 
         embed.add_field(name='', value=content)
