@@ -6,7 +6,7 @@ from discord.ext import commands
 from loguru import logger
 import requests
 
-from main import config
+from main import bot, config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
 deepl_api_key = config['jp']['deepl_api_key']
@@ -14,6 +14,11 @@ deepl_api_key = config['jp']['deepl_api_key']
 class JP(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        logger.debug('Loaded cog JP')
+
+    def cog_unload(self):
+        bot.remove_command('jp')
+        logger.debug('Unloaded cog JP')
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -57,7 +62,7 @@ class JP(commands.Cog):
 
         embed = discord.Embed(
             description=description,
-            color=0x00ff00,
+            color=0xAA8ED6,
             timestamp=message.created_at
         )
 

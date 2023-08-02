@@ -7,7 +7,7 @@ import discord
 from discord.ext import commands
 from loguru import logger
 
-from main import config
+from main import bot, config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
 silent = config['reactions']['silent']
@@ -77,6 +77,12 @@ class Reactions(commands.Cog):
                 VALUES (?, ?, ?, ?)
             ''', (guild_id, 'Country Flags', r'[\U0001F1E6-\U0001F1FF]', 1))
         cur.close()
+        logger.debug('Loaded cog Reactions')
+
+    def cog_unload(self):
+        self.con.close()
+        bot.remove_command('reactions')
+        logger.debug('Unloaded cog Reactions')
 
     reactions = discord.SlashCommandGroup('reactions', description='Reaction group management', guild_ids=command_guild_ids)
 
@@ -398,7 +404,7 @@ class Reactions(commands.Cog):
         title = 'First reactions'
         link_to_message = f'[Jump to message](https://discord.com/channels/{ctx.interaction.guild_id}/{ctx.interaction.channel_id}/{message_id})'
         description = f'{link_to_message}\n\n'
-        color = discord.Color.from_rgb(170, 142, 214)
+        color = 0xAA8ED6
 
         # chunks for the embed description
         buffer = ''
