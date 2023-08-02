@@ -1,3 +1,4 @@
+import sys
 import tomllib
 
 import discord
@@ -23,4 +24,4 @@ async def on_ready():
 
 bot.load_extension('cogs', recursive=True)
 
-bot.run(config['bot']['token'])
+sys.exit(bot.run(config['bot']['token']))
