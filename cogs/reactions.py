@@ -81,7 +81,7 @@ class Reactions(commands.Cog):
 
     def cog_unload(self):
         self.con.close()
-        bot.remove_command('reactions')
+        bot.remove_application_command('reactions')
         logger.debug('Unloaded cog Reactions')
 
     reactions = discord.SlashCommandGroup('reactions', description='Reaction group management', guild_ids=command_guild_ids)

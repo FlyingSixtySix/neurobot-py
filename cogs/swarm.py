@@ -1,15 +1,22 @@
 import discord
 from discord.ext import commands
+from loguru import logger
 
-from main import config
+from main import bot, config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
+
 
 class Swarm(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.last_sticker: discord.StickerItem = None
         self.count = 0
+        logger.debug('Loaded cog Swarm')
+
+    def cog_unload(self):
+        bot.remove_application_command('swarm')
+        logger.debug('Unloaded cog Swarm')
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):

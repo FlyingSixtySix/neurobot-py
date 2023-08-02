@@ -11,13 +11,14 @@ from main import bot, config
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
 deepl_api_key = config['jp']['deepl_api_key']
 
+
 class JP(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         logger.debug('Loaded cog JP')
 
     def cog_unload(self):
-        bot.remove_command('jp')
+        bot.remove_application_command('jp')
         logger.debug('Unloaded cog JP')
 
     @commands.Cog.listener()
