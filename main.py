@@ -15,7 +15,10 @@ intents.message_content = True
 intents.guilds = True
 intents.reactions = True
 
-bot = commands.Bot(intents=intents, help_command=commands.DefaultHelpCommand())
+bot = commands.Bot(
+    intents=intents,
+    help_command=commands.DefaultHelpCommand(),
+    allowed_mentions=discord.AllowedMentions.none())
 
 @bot.event
 async def on_ready():
