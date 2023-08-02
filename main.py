@@ -8,6 +8,9 @@ from loguru import logger
 with open('config.toml', 'rb') as file:
     config = tomllib.load(file)
 
+logger.remove()
+logger.add(sys.stderr, level=config['bot']['log_level'].upper())
+
 intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
