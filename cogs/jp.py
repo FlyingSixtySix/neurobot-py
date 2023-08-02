@@ -26,6 +26,9 @@ class JP(commands.Cog):
         if message.type == discord.MessageType.application_command:
             return
         
+        if str(message.guild.id) not in config['jp']:
+            return
+        
         server_config = config['jp'][str(message.guild.id)]
         target_channel_id = int(server_config['target_channel'])
         output_channel_id = int(server_config['output_channel'])
