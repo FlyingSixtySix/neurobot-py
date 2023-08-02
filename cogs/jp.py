@@ -9,8 +9,6 @@ import requests
 from main import bot, config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
-target_channel_id = int(config['jp']['target_channel'])
-output_channel_id = int(config['jp']['output_channel'])
 deepl_api_key = config['jp']['deepl_api_key']
 
 class JP(commands.Cog):
@@ -19,6 +17,10 @@ class JP(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        server_config = config['jp'][str(message.guild.id)]
+        target_channel_id = int(server_config['target_channel'])
+        output_channel_id = int(server_config['output_channel'])
+
         if message.channel.id != target_channel_id:
             return
         

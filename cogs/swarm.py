@@ -5,7 +5,6 @@ from loguru import logger
 from main import bot, config
 
 command_guild_ids = [int(id) for id in config['bot']['guilds']]
-target_channel_id = int(config['swarm']['target_channel'])
 
 class Swarm(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -15,6 +14,9 @@ class Swarm(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        server_config = config['swarm'][str(message.guild.id)]
+        target_channel_id = int(server_config['target_channel'])
+
         if message.channel.id != target_channel_id:
             return
         
