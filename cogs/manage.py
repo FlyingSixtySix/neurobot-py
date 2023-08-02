@@ -9,6 +9,8 @@ silent = config['manage']['silent']
 
 
 class Manage(commands.Cog):
+    manage = discord.SlashCommandGroup('manage', 'Manage the bot', guild_ids=command_guild_ids)
+    
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         logger.debug('Loaded cog Manage')
@@ -16,8 +18,6 @@ class Manage(commands.Cog):
     def cog_unload(self):
         bot.remove_application_command('manage')
         logger.debug('Unloaded cog Manage')
-
-    manage = discord.SlashCommandGroup('manage', 'Manage the bot', guild_ids=command_guild_ids)
 
     @manage.command()
     @commands.is_owner()

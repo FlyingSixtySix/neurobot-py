@@ -36,6 +36,9 @@ async def get_group_names(ctx: discord.AutocompleteContext, builtin: bool = True
 class Reactions(commands.Cog):
     con: sqlite3.Connection = sqlite3.connect('neurobot.db')
 
+    reactiongroups = discord.SlashCommandGroup('reactiongroups', description='Reaction group management', guild_ids=command_guild_ids)
+    reactions = discord.SlashCommandGroup('reactions', description='Reaction management', guild_ids=command_guild_ids)
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.con.isolation_level = None
@@ -83,8 +86,6 @@ class Reactions(commands.Cog):
         self.con.close()
         bot.remove_application_command('reactions')
         logger.debug('Unloaded cog Reactions')
-
-    reactions = discord.SlashCommandGroup('reactions', description='Reaction group management', guild_ids=command_guild_ids)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -167,7 +168,7 @@ class Reactions(commands.Cog):
     def _format_reaction_group(self, name: str, match: str, match_type: str, enabled: bool, builtin: bool):
         return f'Name: `{name}`\nMatch: `{match}`\nEnabled: {"Yes" if enabled else "No"}\nBuilt-in: {"Yes" if builtin else "No"}\nType: `{self._int_to_match_type(match_type)}`'
     
-    @reactions.command()
+    @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def list(self, ctx: discord.ApplicationContext):
         """
@@ -186,7 +187,7 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(self._format_reaction_groups(names), ephemeral=silent)
 
-    @reactions.command()
+    @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def info(
             self,
@@ -209,7 +210,7 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(self._format_reaction_group(match[0], match[1], match[2], match[3], match[4]), ephemeral=silent)
 
-    @reactions.command()
+    @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def enable(self,
             ctx: discord.ApplicationContext,
@@ -225,7 +226,7 @@ class Reactions(commands.Cog):
         ''', (ctx.interaction.guild_id, name))
         await ctx.respond(f'Reaction group `{name}` enabled', ephemeral=silent)
 
-    @reactions.command()
+    @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def disable(self,
             ctx: discord.ApplicationContext,
@@ -241,7 +242,7 @@ class Reactions(commands.Cog):
         ''', (ctx.interaction.guild_id, name))
         await ctx.respond(f'Reaction group `{name}` disabled', ephemeral=silent)
 
-    @reactions.command()
+    @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def add(
             self,
@@ -272,7 +273,7 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(f'Reaction group `{name}` added with match `{match}`', ephemeral=silent)
 
-    @reactions.command()
+    @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def edit(
             self,
@@ -307,7 +308,7 @@ class Reactions(commands.Cog):
         cur.close()
         await ctx.respond(f'Reaction group `{name}` edited with new match `{match}`', ephemeral=silent)
 
-    @reactions.command()
+    @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def remove(self,
             ctx: discord.ApplicationContext,
@@ -448,7 +449,8 @@ class Reactions(commands.Cog):
             # d T
             buffer += ', '.join(f'<t:{timestamp}:T>' for timestamp in timestamps)
 
-            emoji = ('a' if emoji.startswith('<a') else '') + ':' + emoji.split(':')[1] + ':'
+            if ':' in emoji:
+                emoji = ('a' if emoji.startswith('<a') else '') + ':' + emoji.split(':')[1] + ':'
 
             if emoji_url is not None:
                 buffer += f'[`{emoji}`]({emoji_url})'
