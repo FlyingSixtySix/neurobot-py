@@ -18,7 +18,6 @@ class JP(commands.Cog):
         logger.debug('Loaded cog JP')
 
     def cog_unload(self):
-        bot.remove_application_command('jp')
         logger.debug('Unloaded cog JP')
 
     @commands.Cog.listener()
@@ -41,7 +40,8 @@ class JP(commands.Cog):
         
         content = message.content.strip()
 
-        if re.sub(r'<a?:\w+:\d+>', '', message.content).strip() == '':
+        # ignore messages that are only emojis
+        if re.match(r'^<a?:\w+:\d+>$', content):
             return
         
         body = {
