@@ -78,7 +78,7 @@ class Reactions(commands.Cog):
             cur.execute('''
                 INSERT OR REPLACE INTO reaction_groups (guild_id, name, match, builtin)
                 VALUES (?, ?, ?, ?)
-            ''', (guild_id, 'Country Flags', r'[\U0001F1E6-\U0001F1FF]', 1))
+            ''', (guild_id, 'Country Flags', r'[\U0001F1E6-\U0001F1FF]{2}', 1))
         cur.close()
         logger.debug('Loaded cog Reactions')
 
@@ -91,10 +91,19 @@ class Reactions(commands.Cog):
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
         emoji = str(payload.emoji)
-        reactions_of_type = [r for r in message.reactions if str(r.emoji) == emoji]
         removed = 0
-        nth = len(reactions_of_type)
+
+        same_reaction = [r for r in message.reactions if str(r.emoji) == emoji]
+
+        if len(same_reaction) == 0:
+            # This happens if the user spam reacts/unreacts
+            logger.error(f'No reactions found for {emoji} on message {message.id} in channel {message.channel.id}')
+            return
+        
+        nth = same_reaction[0].count
+
         now = time.time_ns() // 1_000_000
+
         # Check if the reaction matches any reaction groups
         cur = self.con.cursor()
         cur.execute('''
