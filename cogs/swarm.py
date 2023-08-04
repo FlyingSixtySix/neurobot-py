@@ -23,6 +23,9 @@ class Swarm(commands.Cog):
         if message.type == discord.MessageType.application_command:
             return
         
+        if message.guild is None:
+            return
+        
         if str(message.guild.id) not in config['swarm']:
             return
         
