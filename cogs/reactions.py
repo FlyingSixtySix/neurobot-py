@@ -369,7 +369,7 @@ class Reactions(commands.Cog):
 
         cur = self.con.cursor()
         query = '''
-            SELECT emoji, user_id, time
+            SELECT emoji, user_id, time, channel_id
             FROM reactions
             WHERE message_id = ? AND guild_id = ? AND nth = 1
         '''
@@ -411,8 +411,11 @@ class Reactions(commands.Cog):
             await ctx.respond('No reactions found', ephemeral=silent)
             return
         
+        # getting the channel ID from any reaction should work
+        channel_id = reactions[0][3]
+        
         title = 'First reactions'
-        link_to_message = f'[Jump to message](https://discord.com/channels/{ctx.interaction.guild_id}/{ctx.interaction.channel_id}/{message_id})'
+        link_to_message = f'[Jump to message](https://discord.com/channels/{ctx.interaction.guild_id}/{channel_id}/{message_id})'
         description = f'{link_to_message}\n\n'
         color = 0xAA8ED6
 
