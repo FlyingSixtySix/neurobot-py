@@ -18,14 +18,14 @@ class JP(Cog):
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
-        
+
         if message.guild is None:
             return
-        
+
         guild_config = get_guild_config(message.guild.id, 'jp')
         if guild_config is None:
             return
-        
+
         target_channel_id = int(guild_config['target_channel'])
         output_channel_id = int(guild_config['output_channel'])
 
@@ -35,14 +35,14 @@ class JP(Cog):
         # ignore messages that are only emojis
         if re.match(r'^<a?:\w+:\d+>$', message.content):
             return
-        
+
         body = {
             'source_lang': 'JA',
             'target_lang': 'EN-US',
             'text': [message.content]
         }
         body_enc = json.dumps(body)
-        
+
         # send to deepl
         r = requests.post('https://api-free.deepl.com/v2/translate', data=body_enc, headers={
             'Authorization': 'DeepL-Auth-Key ' + deepl_api_key,
@@ -53,7 +53,7 @@ class JP(Cog):
             logger.error('Deepl returned status code {code}', code=r.status_code)
             logger.error(r.text)
             return
-        
+
         description = 'via DeepL | [Jump to message](' + message.jump_url + ')'
 
         embed = discord.Embed(
@@ -67,7 +67,7 @@ class JP(Cog):
 
         embed.add_field(name='', value=message.content)
         embed.add_field(name='Translation', value=r.json()['translations'][0]['text'], inline=False)
-        
+
         await self.bot.get_channel(output_channel_id).send(embed=embed)
 
 
