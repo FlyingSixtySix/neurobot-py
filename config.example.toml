@@ -1,5 +1,6 @@
 [bot]
 token = ""
+prefix = "n!"
 guilds = [112233445566778899]
 log_level = "INFO"
 
@@ -18,3 +19,5 @@ output_channel = 112233445566778899
 
 [swarm.112233445566778899]
 target_channel = 112233445566778899
+
+[pendingrole.112233445566778899]

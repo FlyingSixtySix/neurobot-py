@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import bridge, commands
 
 from main import command_guild_ids, config
 from cog import Cog
@@ -54,5 +54,5 @@ class Swarm(Cog):
             state.count = 1
 
 
-def setup(bot: commands.Bot):
+def setup(bot: bridge.Bot):
     bot.add_cog(Swarm(bot))

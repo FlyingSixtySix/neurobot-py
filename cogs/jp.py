@@ -2,7 +2,7 @@ import json
 import re
 
 import discord
-from discord.ext import commands
+from discord.ext import bridge, commands
 from loguru import logger
 import requests
 
@@ -71,5 +71,5 @@ class JP(Cog):
         await self.bot.get_channel(output_channel_id).send(embed=embed)
 
 
-def setup(bot: commands.Bot):
+def setup(bot: bridge.Bot):
     bot.add_cog(JP(bot))

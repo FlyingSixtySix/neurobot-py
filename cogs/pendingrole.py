@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import bridge, commands
 from loguru import logger
 
 from main import command_guild_ids
@@ -8,8 +8,6 @@ from utils import get_guild_config
 
 
 class PendingRole(Cog):
-    pendingrole = discord.SlashCommandGroup('pendingrole', 'Manage the pending role', guild_ids=command_guild_ids)
-
     manually_processing = []
 
     @commands.Cog.listener()
@@ -30,9 +28,13 @@ class PendingRole(Cog):
             logger.debug(f'Adding roles {", ".join(str(x) for x in role_ids)} to {after.display_name}')
             await after.add_roles(*roles, reason='User no longer pending rule verification')
 
+    @bridge.bridge_group(invoke_without_command=False, aliases=['pr'], guild_ids=command_guild_ids)
+    async def pendingrole(self, ctx: bridge.BridgeContext):
+        pass
+
     @pendingrole.command()
-    @commands.has_permissions(manage_messages=True)
-    async def manual(self, ctx: discord.ApplicationContext):
+    @bridge.has_permissions(manage_messages=True)
+    async def manual(self, ctx: bridge.BridgeExtContext | discord.ApplicationContext):
         """
         Manually verifies all rule-verified users
         """
@@ -66,7 +68,12 @@ class PendingRole(Cog):
             await member.add_roles(*roles, reason='[Manual] User no longer pending rule verification')
             count += 1
 
-        await ctx.followup.send(f'Finished verifying members; {count} updated')
+        if isinstance(ctx, bridge.BridgeExtContext):
+            await ctx.respond(f'Finished verifying members; {count} updated')
+        else:
+            await ctx.followup.send(f'Finished verifying members; {count} updated')
 
-def setup(bot: commands.Bot):
+        self.manually_processing.remove(ctx.guild.id)
+
+def setup(bot: bridge.Bot):
     bot.add_cog(PendingRole(bot))

@@ -2,7 +2,7 @@ import sys
 import tomllib
 
 import discord
-from discord.ext import commands
+from discord.ext import bridge, commands
 from loguru import logger
 
 with open('config.toml', 'rb') as file:
@@ -20,15 +20,23 @@ intents.message_content = True
 intents.guilds = True
 intents.reactions = True
 
-bot = commands.Bot(
+bot = bridge.Bot(
     intents=intents,
-    help_command=commands.DefaultHelpCommand(),
+    command_prefix=config['bot']['prefix'],
+    help_command=None,
     allowed_mentions=discord.AllowedMentions.none())
 
 @bot.event
 async def on_ready():
     logger.info(f'Logged in as {bot.user.name}#{bot.user.discriminator} ({bot.user.id})')
 
+
+@bot.event
+async def on_command_error(ctx: bridge.Context, error: Exception):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    else:
+        await ctx.respond(f'Error: {error}')
 
 bot.load_extension('cogs', recursive=True)
 

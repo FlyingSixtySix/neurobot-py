@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import bridge, commands
 from loguru import logger
 
 from main import command_guild_ids
@@ -46,5 +46,5 @@ class ModUtils(Cog):
         await ctx.respond(f'Message information sent to <#{target_channel_id}>', ephemeral=True)
 
 
-def setup(bot: commands.Bot):
+def setup(bot: bridge.Bot):
     bot.add_cog(ModUtils(bot))

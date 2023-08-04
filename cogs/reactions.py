@@ -4,7 +4,7 @@ import time
 from typing import Callable
 
 import discord
-from discord.ext import commands
+from discord.ext import bridge, commands
 from loguru import logger
 
 from main import command_guild_ids, config
@@ -34,13 +34,14 @@ async def get_group_names(ctx: discord.AutocompleteContext, builtin: bool = True
 
 
 class Reactions(Cog):
-    con: sqlite3.Connection = sqlite3.connect('neurobot.db')
+    con: sqlite3.Connection = None
 
-    reactiongroups = discord.SlashCommandGroup('reactiongroups', description='Reaction group management', guild_ids=command_guild_ids)
-    reactions = discord.SlashCommandGroup('reactions', description='Reaction management', guild_ids=command_guild_ids)
+    # reactiongroups = bridge.BridgeCommandGroup(reactiongroups_cb, name='reactiongroups', description='Reaction group management', guild_ids=command_guild_ids)
+    # reactions = bridge.BridgeCommandGroup(reactiongroups_cb, description='Reaction management', guild_ids=command_guild_ids)
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: bridge.Bot):
         super().__init__(bot)
+        self.con: sqlite3.Connection = sqlite3.connect('neurobot.db')
         self.con.isolation_level = None
         # TABLE: reactions
         # removed = whether the reaction was removed; 0 = no, 1 = self/other, 2 = bot, 3 = failed
@@ -175,9 +176,17 @@ class Reactions(Cog):
     def _format_reaction_group(self, name: str, match: str, match_type: str, enabled: bool, builtin: bool):
         return f'Name: `{name}`\nMatch: `{match}`\nEnabled: {"Yes" if enabled else "No"}\nBuilt-in: {"Yes" if builtin else "No"}\nType: `{self._int_to_match_type(match_type)}`'
 
+    @bridge.bridge_group(invoke_without_command=False, aliases=['rg'], guild_ids=command_guild_ids)
+    async def reactiongroups(self, ctx: bridge.BridgeContext):
+        pass
+
+    @bridge.bridge_group(invoke_without_command=False, aliases=['r'], guild_ids=command_guild_ids)
+    async def reactions(self, ctx: bridge.BridgeContext):
+        pass
+
     @reactiongroups.command()
-    @commands.has_permissions(manage_messages=True)
-    async def list(self, ctx: discord.ApplicationContext):
+    @bridge.has_permissions(manage_messages=True)
+    async def list(self, ctx: bridge.BridgeExtContext):
         """
         List all reaction groups
         """
@@ -186,7 +195,7 @@ class Reactions(Cog):
             SELECT name, enabled, builtin
             FROM reaction_groups
             WHERE guild_id = ?
-        ''', (ctx.interaction.guild_id,))
+        ''', (ctx.guild.id,))
         names = []
         for row in cur.fetchall():
             name = row[0] + (' (enabled)' if row[1] else ' (disabled)') + (' (built-in)' if row[2] == 1 else '')
@@ -195,11 +204,9 @@ class Reactions(Cog):
         await ctx.respond(self._format_reaction_groups(names), ephemeral=silent)
 
     @reactiongroups.command()
-    @commands.has_permissions(manage_messages=True)
-    async def info(
-            self,
-            ctx: discord.ApplicationContext,
-            name: discord.Option(str, description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(get_group_names))):
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(get_group_names))
+    async def info(self, ctx: bridge.BridgeExtContext, *, name: str):
         """
         View information about a reaction group
         """
@@ -208,8 +215,8 @@ class Reactions(Cog):
         cur.execute('''
             SELECT name, match, match_type, enabled, builtin
             FROM reaction_groups
-            WHERE guild_id = ? AND name = ?
-        ''', (ctx.interaction.guild_id, name))
+            WHERE guild_id = ? AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
         match = cur.fetchone()
         if match is None:
             await ctx.respond(f'Reaction group `{name}` not found', ephemeral=silent)
@@ -218,45 +225,65 @@ class Reactions(Cog):
         await ctx.respond(self._format_reaction_group(match[0], match[1], match[2], match[3], match[4]), ephemeral=silent)
 
     @reactiongroups.command()
-    @commands.has_permissions(manage_messages=True)
-    async def enable(self,
-            ctx: discord.ApplicationContext,
-            name: discord.Option(str, required=True, description='The name of the reaction group', autocomplete=discord.utils.basic_autocomplete(get_group_names))):
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(get_group_names))
+    async def enable(self, ctx: bridge.BridgeExtContext, *, name: str):
         """
         Enable a reaction group
         """
         name = name.removesuffix(' (built-in)')
+        # Check if group exists
+        cur = self.con.cursor()
+        cur.execute('''
+            SELECT builtin
+            FROM reaction_groups
+            WHERE (guild_id = ? OR builtin = 1) AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
+        group = cur.fetchone()
+        if group is None:
+            await ctx.respond(f'Reaction group `{name}` does not exist', ephemeral=silent)
+            return
+        # Group exists; we can enable
         self.con.execute('''
             UPDATE reaction_groups
             SET enabled = 1
-            WHERE guild_id = ? AND name = ?
-        ''', (ctx.interaction.guild_id, name))
+            WHERE guild_id = ? AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
         await ctx.respond(f'Reaction group `{name}` enabled', ephemeral=silent)
 
     @reactiongroups.command()
-    @commands.has_permissions(manage_messages=True)
-    async def disable(self,
-            ctx: discord.ApplicationContext,
-            name: discord.Option(str, required=True, description='The name of the reaction group', autocomplete=discord.utils.basic_autocomplete(get_group_names))):
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(get_group_names))
+    async def disable(self, ctx: bridge.BridgeExtContext, *, name: str):
         """
         Disable a reaction group
         """
         name = name.removesuffix(' (built-in)')
+        # Check if group exists
+        cur = self.con.cursor()
+        cur.execute('''
+            SELECT builtin
+            FROM reaction_groups
+            WHERE (guild_id = ? OR builtin = 1) AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
+        group = cur.fetchone()
+        if group is None:
+            await ctx.respond(f'Reaction group `{name}` does not exist', ephemeral=silent)
+            return
+        # Group exists; we can disable
         self.con.execute('''
             UPDATE reaction_groups
             SET enabled = 0
-            WHERE guild_id = ? AND name = ?
-        ''', (ctx.interaction.guild_id, name))
+            WHERE guild_id = ? AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
         await ctx.respond(f'Reaction group `{name}` disabled', ephemeral=silent)
 
     @reactiongroups.command()
-    @commands.has_permissions(manage_messages=True)
-    async def add(
-            self,
-            ctx: discord.ApplicationContext,
-            name: discord.Option(str, required=True, description='The name of the reaction group'),
-            match: discord.Option(str, required=True, description='The regex to match against'),
-            match_type: discord.Option(str, required=True, description='The type of match to use', choices=['substring', 'exact'])):
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('name', description='The name of the reaction group', required=True)
+    @discord.option('match', description='The regex to match against', required=True)
+    @discord.option('match_type', description='The type of match to use', required=True, choices=['substring', 'exact'])
+    async def add(self, ctx: bridge.BridgeExtContext, name: str, match: str, match_type: str):
         """
         Add a reaction group
         """
@@ -266,8 +293,8 @@ class Reactions(Cog):
         cur.execute('''
             SELECT builtin
             FROM reaction_groups
-            WHERE (guild_id = ? OR builtin = 1) AND name = ?
-        ''', (ctx.interaction.guild_id, name))
+            WHERE (guild_id = ? OR builtin = 1) AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is not None:
             await ctx.respond(f'Reaction group `{name}` already exists', ephemeral=silent)
@@ -276,18 +303,16 @@ class Reactions(Cog):
         cur.execute('''
             INSERT INTO reaction_groups (guild_id, name, match, match_type)
             VALUES (?, ?, ?, ?)
-        ''', (ctx.interaction.guild_id, name, match, self._match_type_to_int(match_type)))
+        ''', (ctx.guild.id, name, match, self._match_type_to_int(match_type)))
         cur.close()
         await ctx.respond(f'Reaction group `{name}` added with match `{match}`', ephemeral=silent)
 
     @reactiongroups.command()
-    @commands.has_permissions(manage_messages=True)
-    async def edit(
-            self,
-            ctx: discord.ApplicationContext,
-            name: discord.Option(str, required=True, description='The name of the reaction group', autocomplete=discord.utils.basic_autocomplete(lambda i: get_group_names(i, False))),
-            match: discord.Option(str, required=True, description='The regex to match against'),
-            match_type: discord.Option(str, required=True, description='The type of match to use', choices=['substring', 'exact'])):
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(lambda i: get_group_names(i, False)))
+    @discord.option('match', description='The regex to match against', required=True)
+    @discord.option('match_type', description='The type of match to use', required=True, choices=['substring', 'exact'])
+    async def edit(self, ctx: bridge.BridgeExtContext, name: str, match: str, match_type: str):
         """
         Edit a reaction group
         """
@@ -297,8 +322,8 @@ class Reactions(Cog):
         cur.execute('''
             SELECT builtin
             FROM reaction_groups
-            WHERE (guild_id = ? OR builtin = 1) AND name = ?
-        ''', (ctx.interaction.guild_id, name))
+            WHERE (guild_id = ? OR builtin = 1) AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is None:
             await ctx.respond(f'Reaction group `{name}` not found', ephemeral=silent)
@@ -310,16 +335,15 @@ class Reactions(Cog):
         cur.execute('''
             UPDATE reaction_groups
             SET match = ?, match_type = ?
-            WHERE guild_id = ? AND name = ?
-        ''', (match, self._match_type_to_int(match_type), ctx.interaction.guild_id, name))
+            WHERE guild_id = ? AND LOWER(name) = ?
+        ''', (match, self._match_type_to_int(match_type), ctx.guild.id, name.lower()))
         cur.close()
         await ctx.respond(f'Reaction group `{name}` edited with new match `{match}`', ephemeral=silent)
 
-    @reactiongroups.command()
-    @commands.has_permissions(manage_messages=True)
-    async def remove(self,
-            ctx: discord.ApplicationContext,
-            name: discord.Option(str, required=True, description='The name of the reaction group', autocomplete=discord.utils.basic_autocomplete(lambda i: get_group_names(i, False)))):
+    @reactiongroups.command(aliases=['delete'])
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(lambda i: get_group_names(i, False)))
+    async def remove(self, ctx: bridge.BridgeExtContext, *, name: str):
         """
         Remove a reaction group
         """
@@ -329,8 +353,8 @@ class Reactions(Cog):
         cur.execute('''
             SELECT builtin
             FROM reaction_groups
-            WHERE (guild_id = ? OR builtin = 1) AND name = ?
-        ''', (ctx.interaction.guild_id, name))
+            WHERE (guild_id = ? OR builtin = 1) AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is None:
             await ctx.respond(f'Reaction group `{name}` not found.', ephemeral=silent)
@@ -341,18 +365,17 @@ class Reactions(Cog):
         # Group exists and isn't built-in; we can remove
         cur.execute('''
             DELETE FROM reaction_groups
-            WHERE guild_id = ? AND name = ?
-        ''', (ctx.interaction.guild_id, name))
+            WHERE guild_id = ? AND LOWER(name) = ?
+        ''', (ctx.guild.id, name.lower()))
         cur.close()
         await ctx.respond(f'Reaction group `{name}` removed', ephemeral=silent)
 
     @reactions.command()
-    @commands.has_permissions(manage_messages=True)
-    async def first(self,
-            ctx: discord.ApplicationContext,
-            message_input: discord.Option(str, required=True, description='A link or ID of the message'),
-            filter_emoji: discord.Option(str, name='emoji', required=False, description='The name of the emoji to filter by'),
-            filter_user: discord.Option(str, name='user', required=False, description='The name or ID of the user to filter by')):
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('message_input', description='A link or ID of the message', required=True)
+    @discord.option('emoji', description='The name of the emoji to filter by', required=False)
+    @discord.option('user', description='The name or ID of the user to filter by', required=False)
+    async def first(self, ctx: bridge.BridgeExtContext | discord.ApplicationContext, message_input: str, filter_emoji: str = None, filter_user: str = None):
         """
         View who reacted to a message first
         """
@@ -371,7 +394,7 @@ class Reactions(Cog):
             FROM reactions
             WHERE message_id = ? AND guild_id = ? AND nth = 1
         '''
-        params = (message_id, ctx.interaction.guild_id)
+        params = (message_id, ctx.guild.id)
 
         if filter_emoji is not None:
             query += ' AND emoji LIKE ?'
@@ -385,7 +408,7 @@ class Reactions(Cog):
                 member_lambda: Callable[[discord.Member], bool] = (lambda m:
                                       (filter_user.lower() in m.name.lower()) or
                                       (filter_user.lower() in m.display_name.lower()))
-                members = list(filter(member_lambda, ctx.interaction.guild.members))
+                members = list(filter(member_lambda, ctx.guild.members))
                 if len(members) == 0:
                     # members = list(filter(member_lambda, await ctx.interaction.guild.fetch_members(limit=None).flatten()))
                     # if len(members) == 0:
@@ -413,7 +436,7 @@ class Reactions(Cog):
         channel_id = reactions[0][3]
 
         title = 'First reactions'
-        link_to_message = f'[Jump to message](https://discord.com/channels/{ctx.interaction.guild_id}/{channel_id}/{message_id})'
+        link_to_message = f'[Jump to message](https://discord.com/channels/{ctx.guild.id}/{channel_id}/{message_id})'
         description = f'{link_to_message}\n\n'
         color = 0xAA8ED6
 
@@ -482,10 +505,13 @@ class Reactions(Cog):
         embed = discord.Embed(title=title, description=description, color=color)
 
         if followup:
-            await ctx.followup.send(embed=embed)
+            if isinstance(ctx, bridge.BridgeExtContext):
+                await ctx.send(embed=embed)
+            else:
+                await ctx.followup.send(embed=embed)
         else:
             await ctx.respond(embed=embed)
 
 
-def setup(bot: commands.Bot):
+def setup(bot: bridge.Bot):
     bot.add_cog(Reactions(bot))
