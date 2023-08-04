@@ -2,31 +2,23 @@ import discord
 from discord.ext import commands
 from loguru import logger
 
-from main import bot, config
+from main import command_guild_ids
+from cog import Cog
+from utils import get_guild_config
 
-command_guild_ids = [int(id) for id in config['bot']['guilds']]
 
-
-class PendingRole(commands.Cog):
+class PendingRole(Cog):
     pendingrole = discord.SlashCommandGroup('pendingrole', 'Manage the pending role', guild_ids=command_guild_ids)
 
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.manually_processing = []
-        logger.debug('Loaded cog PendingRole')
-
-    def cog_unload(self):
-        bot.remove_application_command('jp')
-        logger.debug('Unloaded cog PendingRole')
+    manually_processing = []
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        if str(after.guild.id) not in config['pendingrole']:
+        guild_config = get_guild_config(after.guild.id, 'pendingrole')
+        if guild_config is None:
             return
-        
-        server_config = config['pendingrole'][str(after.guild.id)]
-        role_ids = server_config['roles']
 
+        role_ids = guild_config['roles']
         roles = [after.guild.get_role(role_id) for role_id in role_ids]
 
         # if after has any of the roles in role_ids, skip
@@ -44,16 +36,15 @@ class PendingRole(commands.Cog):
         """
         Manually verifies all rule-verified users
         """
-        if str(ctx.guild.id) not in config['pendingrole']:
-            return
-        
         if ctx.guild.id in self.manually_processing:
-            await ctx.respond('Already processing members, please wait', ephemeral=True)
+            await ctx.respond('Already processing members, please wait...', ephemeral=True)
             return
-        
-        server_config = config['pendingrole'][str(ctx.guild.id)]
-        role_ids = server_config['roles']
 
+        guild_config = get_guild_config(ctx.guild.id, 'pendingrole')
+        if guild_config is None:
+            return
+
+        role_ids = guild_config['roles']
         roles = [ctx.guild.get_role(role_id) for role_id in role_ids]
 
         await ctx.respond('Processing verified members...')

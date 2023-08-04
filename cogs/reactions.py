@@ -7,15 +7,15 @@ import discord
 from discord.ext import commands
 from loguru import logger
 
-from main import bot, config
+from main import command_guild_ids, config
+from cog import Cog
 
-command_guild_ids = [int(id) for id in config['bot']['guilds']]
 silent = config['reactions']['silent']
 
 
 async def get_group_names(ctx: discord.AutocompleteContext, builtin: bool = True):
     """
-    Slash command autocomplete for reaction group names.
+    Slash command autocomplete for reaction group names
     """
     cur = Reactions.con.cursor()
     cur.execute('''
@@ -33,14 +33,14 @@ async def get_group_names(ctx: discord.AutocompleteContext, builtin: bool = True
     return names
 
 
-class Reactions(commands.Cog):
+class Reactions(Cog):
     con: sqlite3.Connection = sqlite3.connect('neurobot.db')
 
     reactiongroups = discord.SlashCommandGroup('reactiongroups', description='Reaction group management', guild_ids=command_guild_ids)
     reactions = discord.SlashCommandGroup('reactions', description='Reaction management', guild_ids=command_guild_ids)
 
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        super().__init__(bot)
         self.con.isolation_level = None
         # TABLE: reactions
         # removed = whether the reaction was removed; 0 = no, 1 = self/other, 2 = bot, 3 = failed
@@ -80,12 +80,10 @@ class Reactions(commands.Cog):
                 VALUES (?, ?, ?, ?)
             ''', (guild_id, 'Country Flags', r'[\U0001F1E6-\U0001F1FF]{2}', 1))
         cur.close()
-        logger.debug('Loaded cog Reactions')
 
     def cog_unload(self):
+        super().cog_unload()
         self.con.close()
-        bot.remove_application_command('reactions')
-        logger.debug('Unloaded cog Reactions')
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -99,7 +97,7 @@ class Reactions(commands.Cog):
             # This happens if the user spam reacts/unreacts
             logger.error(f'No reactions found for {emoji} on message {message.id} in channel {message.channel.id}')
             return
-        
+
         nth = same_reaction[0].count
 
         now = time.time_ns() // 1_000_000
@@ -165,7 +163,7 @@ class Reactions(commands.Cog):
             return 1
         else:
             raise ValueError(f'Invalid match type string: {match_type}')
-        
+
     def _int_to_match_type(self, match_type: int):
         if match_type == 0:
             return 'substring'
@@ -176,7 +174,7 @@ class Reactions(commands.Cog):
 
     def _format_reaction_group(self, name: str, match: str, match_type: str, enabled: bool, builtin: bool):
         return f'Name: `{name}`\nMatch: `{match}`\nEnabled: {"Yes" if enabled else "No"}\nBuilt-in: {"Yes" if builtin else "No"}\nType: `{self._int_to_match_type(match_type)}`'
-    
+
     @reactiongroups.command()
     @commands.has_permissions(manage_messages=True)
     async def list(self, ctx: discord.ApplicationContext):
@@ -384,7 +382,7 @@ class Reactions(commands.Cog):
                 query += ' AND user_id = ?'
                 params += (int(filter_user),)
             else:
-                member_lambda: Callable[[discord.Member], bool] = (lambda m: 
+                member_lambda: Callable[[discord.Member], bool] = (lambda m:
                                       (filter_user.lower() in m.name.lower()) or
                                       (filter_user.lower() in m.display_name.lower()))
                 members = list(filter(member_lambda, ctx.interaction.guild.members))
@@ -410,10 +408,10 @@ class Reactions(commands.Cog):
         if len(reactions) == 0:
             await ctx.respond('No reactions found', ephemeral=silent)
             return
-        
+
         # getting the channel ID from any reaction should work
         channel_id = reactions[0][3]
-        
+
         title = 'First reactions'
         link_to_message = f'[Jump to message](https://discord.com/channels/{ctx.interaction.guild_id}/{channel_id}/{message_id})'
         description = f'{link_to_message}\n\n'
@@ -423,7 +421,7 @@ class Reactions(commands.Cog):
         buffer = ''
         # whether to use followup or send a single embed
         followup = False
-        
+
         # keep track of emoji/user pairs for multiple reactions of the same
         #  type from the same user
         already_processed = []
@@ -453,12 +451,12 @@ class Reactions(commands.Cog):
                 #  keep track of it so we don't process it again
                 already_processed.append((same_reactions[0][0], same_reactions[0][1]))
                 buffer += f'{len(same_reactions)}x '
-            
+
             timestamps = list(map(lambda r: r[2] // 1000, same_reactions))
 
             buffer = ''
 
-            # d T
+            # 01:23:45 AM
             buffer += ', '.join(f'<t:{timestamp}:T>' for timestamp in timestamps)
 
             if ':' in emoji:

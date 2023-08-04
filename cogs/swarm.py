@@ -1,55 +1,57 @@
 import discord
 from discord.ext import commands
-from loguru import logger
 
-from main import bot, config
+from main import command_guild_ids, config
+from cog import Cog
+from utils import get_guild_config
 
-command_guild_ids = [int(id) for id in config['bot']['guilds']]
 
-
-class Swarm(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.last_sticker: discord.StickerItem = None
+class GuildState:
+    def __init__(self):
         self.count = 0
-        logger.debug('Loaded cog Swarm')
+        self.last_sticker = None
 
-    def cog_unload(self):
-        bot.remove_application_command('swarm')
-        logger.debug('Unloaded cog Swarm')
+
+class Swarm(Cog):
+    guilds = {
+        x: GuildState()
+        for x in command_guild_ids if str(x) in config['swarm']
+    }
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.type == discord.MessageType.application_command:
+        if message.author.bot:
             return
-        
+
         if message.guild is None:
             return
-        
-        if str(message.guild.id) not in config['swarm']:
+
+        guild_config = get_guild_config(message.guild.id, 'swarm')
+        if guild_config is None:
             return
-        
-        server_config = config['swarm'][str(message.guild.id)]
-        target_channel_id = int(server_config['target_channel'])
+
+        target_channel_id = int(guild_config['target_channel'])
 
         if message.channel.id != target_channel_id:
             return
-        
-        if message.author.bot:
+
+        if not message.stickers:
             return
-        
-        if message.stickers:
-            if self.last_sticker is None:
-                self.last_sticker = message.stickers[0]
-            if self.last_sticker == message.stickers[0]:
-                self.count += 1
-                if self.count % 5 == 0:
-                    await message.channel.send(f'{self.last_sticker.name} has a streak of {self.count}!', allowed_mentions=discord.AllowedMentions.none())
-            else:
-                if self.count >= 5:
-                    await message.channel.send(f'{message.author.mention} broke {self.last_sticker.name} streak of {self.count}!', allowed_mentions=discord.AllowedMentions.none())
-                self.last_sticker = message.stickers[0]
-                self.count = 1
+
+        state = self.guilds[message.guild.id]
+        sticker = message.stickers[0]
+
+        if state.last_sticker is None:
+            state.last_sticker = sticker
+        if state.last_sticker == sticker:
+            state.count += 1
+            if state.count % 5 == 0:
+                await message.channel.send(f'{state.last_sticker.name} has a streak of {state.count}!', allowed_mentions=discord.AllowedMentions.none())
+        else:
+            if state.count >= 5:
+                await message.channel.send(f'{message.author.mention} broke {state.last_sticker.name} streak of {state.count}!', allowed_mentions=discord.AllowedMentions.none())
+            state.last_sticker = sticker
+            state.count = 1
 
 
 def setup(bot: commands.Bot):

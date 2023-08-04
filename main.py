@@ -8,6 +8,8 @@ from loguru import logger
 with open('config.toml', 'rb') as file:
     config = tomllib.load(file)
 
+command_guild_ids = [int(id) for id in config['bot']['guilds']]
+
 logger.remove()
 logger.add(sys.stderr, level=config['bot']['log_level'].upper())
 

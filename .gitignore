@@ -161,5 +161,6 @@ cython_debug/
 
 # neurobot
 .vscode/
-config.toml
+config*.toml
+!config.example.toml
 neurobot.db

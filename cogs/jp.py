@@ -6,51 +6,40 @@ from discord.ext import commands
 from loguru import logger
 import requests
 
-from main import bot, config
+from main import config
+from cog import Cog
+from utils import get_guild_config
 
-command_guild_ids = [int(id) for id in config['bot']['guilds']]
 deepl_api_key = config['jp']['deepl_api_key']
 
 
-class JP(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        logger.debug('Loaded cog JP')
-
-    def cog_unload(self):
-        logger.debug('Unloaded cog JP')
-
+class JP(Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.type == discord.MessageType.application_command:
+        if message.author.bot:
             return
         
         if message.guild is None:
             return
         
-        if str(message.guild.id) not in config['jp']:
+        guild_config = get_guild_config(message.guild.id, 'jp')
+        if guild_config is None:
             return
         
-        server_config = config['jp'][str(message.guild.id)]
-        target_channel_id = int(server_config['target_channel'])
-        output_channel_id = int(server_config['output_channel'])
+        target_channel_id = int(guild_config['target_channel'])
+        output_channel_id = int(guild_config['output_channel'])
 
         if message.channel.id != target_channel_id:
             return
-        
-        if message.author.bot:
-            return
-        
-        content = message.content.strip()
 
         # ignore messages that are only emojis
-        if re.match(r'^<a?:\w+:\d+>$', content):
+        if re.match(r'^<a?:\w+:\d+>$', message.content):
             return
         
         body = {
             'source_lang': 'JA',
             'target_lang': 'EN-US',
-            'text': [content]
+            'text': [message.content]
         }
         body_enc = json.dumps(body)
         
@@ -76,7 +65,7 @@ class JP(commands.Cog):
         name = message.author.name + ('#' + message.author.discriminator if message.author.discriminator != '0' else '')
         embed.set_author(name=name, icon_url=message.author.display_avatar.url)
 
-        embed.add_field(name='', value=content)
+        embed.add_field(name='', value=message.content)
         embed.add_field(name='Translation', value=r.json()['translations'][0]['text'], inline=False)
         
         await self.bot.get_channel(output_channel_id).send(embed=embed)
