@@ -36,6 +36,13 @@ async def get_group_names(ctx: discord.AutocompleteContext, builtin: bool = True
 class Reactions(Cog):
     con: sqlite3.Connection = None
 
+    REACTION_REMOVED_SELF = 1
+    REACTION_REMOVED_BOT = 2
+    REACTION_REMOVED_FAILED = 3
+
+    MATCH_TYPE_SUBSTRING = 0
+    MATCH_TYPE_EXACT = 1
+
     # reactiongroups = bridge.BridgeCommandGroup(reactiongroups_cb, name='reactiongroups', description='Reaction group management', guild_ids=command_guild_ids)
     # reactions = bridge.BridgeCommandGroup(reactiongroups_cb, description='Reaction management', guild_ids=command_guild_ids)
 
@@ -44,7 +51,6 @@ class Reactions(Cog):
         self.con: sqlite3.Connection = sqlite3.connect('neurobot.db')
         self.con.isolation_level = None
         # TABLE: reactions
-        # removed = whether the reaction was removed; 0 = no, 1 = self/other, 2 = bot, 3 = failed
         # nth = which reaction of this type it was (first = 1, second = 2, etc.)
         cur = self.con.cursor()
         cur.execute('''
@@ -62,7 +68,6 @@ class Reactions(Cog):
             );
         ''')
         # TABLE: reaction_groups
-        # match_type = the type of match to perform when reaction is added; 0 = substring, 1 = exact
         cur.execute('''
             CREATE TABLE IF NOT EXISTS reaction_groups (
                 guild_id INTEGER NOT NULL,
@@ -88,23 +93,42 @@ class Reactions(Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
+        try:
+            message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
+        except discord.NotFound:
+            logger.error(f'Could not find message {payload.message_id} in channel {payload.channel_id}')
+            return
         emoji = str(payload.emoji)
         removed = 0
 
         same_reaction = [r for r in message.reactions if str(r.emoji) == emoji]
 
-        if len(same_reaction) == 0:
-            # This happens if the user spam reacts/unreacts
-            logger.error(f'No reactions found for {emoji} on message {message.id} in channel {message.channel.id}')
-            return
+        cur = self.con.cursor()
 
-        nth = same_reaction[0].count
+        cur.execute('''
+            SELECT nth
+            FROM reactions
+            WHERE message_id = ? AND channel_id = ? AND guild_id = ? AND emoji = ?
+        ''', (payload.message_id, payload.channel_id, payload.guild_id, emoji))
+        rows = cur.fetchall()
+
+        # If the user spam reacts/unreacts, the message cache doesn't have the
+        # reaction yet, so assume its nth based on what we already have
+        if len(same_reaction) == 0:
+            if len(rows) == 0:
+                nth = 1
+            else:
+                nth = len(rows) + 1
+            logger.error(f'No reactions found for {emoji} on message {message.id}; assuming nth is {nth}')
+        else:
+            if len(rows) == same_reaction[0].count:
+                nth = len(rows) + 1
+            else:
+                nth = same_reaction[0].count
 
         now = time.time_ns() // 1_000_000
 
         # Check if the reaction matches any reaction groups
-        cur = self.con.cursor()
         cur.execute('''
             SELECT name, match, match_type, enabled
             FROM reaction_groups
@@ -118,10 +142,10 @@ class Reactions(Cog):
             match_type = row[2]
             enabled = row[3]
 
-            if match_type == 0:
+            if match_type == Reactions.MATCH_TYPE_SUBSTRING:
                 if bool(re.search(match, emoji, re.IGNORECASE)):
                     hit_groups.append((name, enabled))
-            elif match_type == 1:
+            elif match_type == Reactions.MATCH_TYPE_EXACT:
                 # Exact string match
                 emoji_name = emoji.split(':')[1] if ':' in emoji else emoji
                 if emoji == match or bool(re.search(match, emoji_name, re.IGNORECASE)):
@@ -133,9 +157,9 @@ class Reactions(Cog):
             if enabled:
                 try:
                     await message.remove_reaction(payload.emoji, payload.member)
-                    removed = 2
+                    removed = Reactions.REACTION_REMOVED_BOT
                 except discord.Forbidden:
-                    removed = 3
+                    removed = Reactions.REACTION_REMOVED_FAILED
                 break
         hit_groups_str = ','.join((f'{name}::{enabled}' if name != first_hit_group else f'{name}::*') for (name, enabled) in hit_groups)
         self.con.execute('''
@@ -148,9 +172,9 @@ class Reactions(Cog):
         emoji = str(payload.emoji)
         self.con.execute('''
             UPDATE reactions
-            SET removed = 1
+            SET removed = ?
             WHERE message_id = ? AND channel_id = ? AND guild_id = ? AND user_id = ? AND emoji = ? AND removed = 0
-        ''', (payload.message_id, payload.channel_id, payload.guild_id, payload.user_id, emoji))
+        ''', (Reactions.REACTION_REMOVED_SELF, payload.message_id, payload.channel_id, payload.guild_id, payload.user_id, emoji))
 
     def _format_reaction_groups(self, groups: list[str]):
         if len(groups) == 0:
