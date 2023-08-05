@@ -75,5 +75,6 @@ class PendingRole(Cog):
 
         self.manually_processing.remove(ctx.guild.id)
 
+
 def setup(bot: bridge.Bot):
     bot.add_cog(PendingRole(bot))
