@@ -34,7 +34,8 @@ async def get_group_names(ctx: discord.AutocompleteContext, builtin: bool = True
 
 
 class Reactions(Cog):
-    con: sqlite3.Connection = None
+    con = sqlite3.connect('neurobot.db')
+    con.isolation_level = None
 
     REACTION_REMOVED_SELF = 1
     REACTION_REMOVED_BOT = 2
@@ -48,8 +49,6 @@ class Reactions(Cog):
 
     def __init__(self, bot: bridge.Bot):
         super().__init__(bot)
-        self.con: sqlite3.Connection = sqlite3.connect('neurobot.db')
-        self.con.isolation_level = None
         # TABLE: reactions
         # nth = which reaction of this type it was (first = 1, second = 2, etc.)
         cur = self.con.cursor()
@@ -89,7 +88,6 @@ class Reactions(Cog):
 
     def cog_unload(self):
         super().cog_unload()
-        self.con.close()
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
