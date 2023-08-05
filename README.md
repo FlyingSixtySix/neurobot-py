@@ -32,6 +32,46 @@ python main.py
 - The `jp`, `swarm`, and `pendingrole` sections in `config.toml` work based on their guild ID being in the name, like `[jp.112233445566778899]`. If you don't want those features, put `[jp]`, `[swarm]`, and `[pendingrole]` on their own lines.
 - `neurobot.db` is only used by the `reactions` cog at the moment. If deleted, it will be recreated on bot init.
 
+## Examples
+### Barebones Cog
+```py
+from discord.ext import bridge
+
+from cog import Cog
+
+
+class MyCog(Cog):
+    pass
+
+
+def setup(bot: bridge.Bot):
+    bot.add_cog(MyCog(bot))
+
+```
+### Command w/ Option
+```py
+import discord
+from discord.ext import bridge
+
+from main import command_guild_ids
+from cog import Cog
+
+
+class Pinger(Cog):
+    @bridge.bridge_command(guild_ids=command_guild_ids)
+    @discord.option('uppercase', description='Makes the response uppercase', choices=['True', 'False'])
+    async def ping(self, ctx: bridge.BridgeExtContext, uppercase: str = 'False'):
+        """
+        Response with "Pong!" or "PONG!"
+        """
+        await ctx.respond('PONG!' if uppercase == 'True' else 'Pong!')
+
+
+def setup(bot: bridge.Bot):
+    bot.add_cog(Pinger(bot))
+
+```
+
 ## Contributing
 
 Contact vanyilla on Discord before contributing any features.
