@@ -44,9 +44,6 @@ class Reactions(Cog):
     MATCH_TYPE_SUBSTRING = 0
     MATCH_TYPE_EXACT = 1
 
-    # reactiongroups = bridge.BridgeCommandGroup(reactiongroups_cb, name='reactiongroups', description='Reaction group management', guild_ids=command_guild_ids)
-    # reactions = bridge.BridgeCommandGroup(reactiongroups_cb, description='Reaction management', guild_ids=command_guild_ids)
-
     def __init__(self, bot: bridge.Bot):
         super().__init__(bot)
         # TABLE: reactions
