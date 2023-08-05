@@ -26,6 +26,12 @@ pipenv shell
 python main.py
 ```
 
+## Additional
+
+- There is no current way to disable cogs on start; simply unload after the fact with the `manage` command.
+- The `jp`, `swarm`, and `pendingrole` sections in `config.toml` work based on their guild ID being in the name, like `[jp.112233445566778899]`. If you don't want those features, put `[jp]`, `[swarm]`, and `[pendingrole]` on their own lines.
+- `neurobot.db` is only used by the `reactions` cog at the moment. If deleted, it will be recreated on bot init.
+
 ## Contributing
 
 Contact vanyilla on Discord before contributing any features.
