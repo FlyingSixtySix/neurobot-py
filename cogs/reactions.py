@@ -83,9 +83,6 @@ class Reactions(Cog):
             ''', (guild_id, 'Country Flags', r'[\U0001F1E6-\U0001F1FF]{2}', 1))
         cur.close()
 
-    def cog_unload(self):
-        super().cog_unload()
-
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         try:
