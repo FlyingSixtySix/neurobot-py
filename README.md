@@ -1,6 +1,6 @@
 # NeuroBot
 
-Discord bot for Neuro-sama Headquarters.
+Discord bot for Neuro-sama Headquarters
 
 ## Running
 
