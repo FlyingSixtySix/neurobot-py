@@ -426,8 +426,6 @@ class Reactions(Cog):
                                       (filter_user.lower() in m.display_name.lower()))
                 members = list(filter(member_lambda, ctx.guild.members))
                 if len(members) == 0:
-                    # members = list(filter(member_lambda, await ctx.interaction.guild.fetch_members(limit=None).flatten()))
-                    # if len(members) == 0:
                     await ctx.respond('No users found by that filter', ephemeral=silent)
                     return
                 elif len(members) > 1:
