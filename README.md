@@ -74,4 +74,4 @@ def setup(bot: bridge.Bot):
 
 ## Contributing
 
-Contact vanyilla on Discord before contributing any features.
+Contributions are not being accepted at this time. Sorry!
