@@ -44,6 +44,9 @@ class Reactions(Cog):
     MATCH_TYPE_SUBSTRING = 0
     MATCH_TYPE_EXACT = 1
 
+    CHANNEL_LIST_TYPE_WHITELIST = 0
+    CHANNEL_LIST_TYPE_BLACKLIST = 1
+
     def __init__(self, bot: bridge.Bot):
         super().__init__(bot)
         # TABLE: reactions
@@ -72,6 +75,7 @@ class Reactions(Cog):
                 match TEXT NOT NULL,
                 match_type INTEGER NOT NULL DEFAULT 0,
                 builtin INTEGER NOT NULL DEFAULT 0,
+                channel_list_type INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (guild_id, name)
             );
         ''')
@@ -81,6 +85,17 @@ class Reactions(Cog):
                 INSERT OR REPLACE INTO reaction_groups (guild_id, name, match, builtin)
                 VALUES (?, ?, ?, ?)
             ''', (guild_id, 'Country Flags', r'[\U0001F1E6-\U0001F1FF]{2}', 1))
+        # TABLE: reaction_groups_channel_lists
+        # channel_ids is comma-separated
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS reaction_groups_channel_lists (
+                guild_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                type INTEGER NOT NULL DEFAULT 0,
+                channel_ids TEXT NOT NULL,
+                PRIMARY KEY (guild_id, name, type)
+            );
+        ''')
         cur.close()
 
     @commands.Cog.listener()
@@ -120,6 +135,25 @@ class Reactions(Cog):
 
         now = time.time_ns() // 1_000_000
 
+        skip_removal = False
+
+        # Find any whitelists/blacklists that apply to this channel
+        cur.execute('''
+            SELECT name, type, channel_ids
+            FROM reaction_groups_channel_lists
+            WHERE guild_id = ?
+        ''', (payload.guild_id,))
+        for row in cur.fetchall():
+            name = row[0]
+            type = row[1]
+            channel_ids = row[2].split(',')
+            if str(payload.channel_id) in channel_ids:
+                if type == Reactions.CHANNEL_LIST_TYPE_WHITELIST:
+                    skip_removal = True
+                elif type == Reactions.CHANNEL_LIST_TYPE_BLACKLIST:
+                    skip_removal = False
+                break
+
         # Check if the reaction matches any reaction groups
         cur.execute('''
             SELECT name, match, match_type, enabled
@@ -146,7 +180,7 @@ class Reactions(Cog):
         first_hit_group = None
         for (name, enabled) in hit_groups:
             first_hit_group = name
-            if enabled:
+            if enabled and not skip_removal:
                 try:
                     await message.remove_reaction(payload.emoji, payload.member)
                     removed = Reactions.REACTION_REMOVED_BOT
