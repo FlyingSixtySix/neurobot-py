@@ -46,7 +46,7 @@ class PendingRole(Cog):
             await message.author.add_roles(*roles, reason='[interaction/message] User no longer pending rule verification')
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member):
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         guild_config = get_guild_config(member.guild.id, 'pendingrole')
         if guild_config is None:
             return
