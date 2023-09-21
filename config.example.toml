@@ -22,6 +22,7 @@ target_channel = 112233445566778899
 
 [pendingrole.112233445566778899]
 roles = [112233445566778899]
+triggers = ["rules", "interaction"]
 
 [modutils.112233445566778899]
 log_info_target_channel = 112233445566778899

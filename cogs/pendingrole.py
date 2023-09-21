@@ -24,9 +24,43 @@ class PendingRole(Cog):
             return
 
         # if the user completed rule verification (no longer pending), add the roles
-        if before.pending and not after.pending:
+        if before.pending and not after.pending and 'rules' in guild_config['triggers']:
             logger.debug(f'Adding roles {", ".join(str(x) for x in role_ids)} to {after.display_name}')
-            await after.add_roles(*roles, reason='User no longer pending rule verification')
+            await after.add_roles(*roles, reason='[rules] User no longer pending rule verification')
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        guild_config = get_guild_config(message.guild.id, 'pendingrole')
+        if guild_config is None:
+            return
+
+        role_ids = guild_config['roles']
+        roles = [message.guild.get_role(role_id) for role_id in role_ids]
+
+        # if author has any of the roles in role_ids, skip
+        if any(role.id in role_ids for role in message.author.roles):
+            return
+
+        if 'interaction' in guild_config['triggers']:
+            logger.debug(f'Adding roles {", ".join(str(x) for x in role_ids)} to {message.author.display_name}')
+            await message.author.add_roles(*roles, reason='[interaction/message] User no longer pending rule verification')
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member):
+        guild_config = get_guild_config(member.guild.id, 'pendingrole')
+        if guild_config is None:
+            return
+
+        role_ids = guild_config['roles']
+        roles = [member.guild.get_role(role_id) for role_id in role_ids]
+
+        # if member has any of the roles in role_ids, skip
+        if any(role.id in role_ids for role in member.roles):
+            return
+
+        if 'interaction' in guild_config['triggers']:
+            logger.debug(f'Adding roles {", ".join(str(x) for x in role_ids)} to {member.display_name}')
+            await member.add_roles(*roles, reason='[interaction/voice] User no longer pending rule verification')
 
     @bridge.bridge_group(invoke_without_command=False, aliases=['pr'], guild_ids=command_guild_ids)
     async def pendingrole(self, ctx: bridge.BridgeContext):
