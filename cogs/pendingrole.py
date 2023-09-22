@@ -37,8 +37,13 @@ class PendingRole(Cog):
         role_ids = guild_config['roles']
         roles = [message.guild.get_role(role_id) for role_id in role_ids]
 
+        member = message.author
+        if not isinstance(message.author, discord.Member):
+            logger.debug(f'Message author is not a member')
+            member = message.guild.get_member(message.author.id)
+
         # if author has any of the roles in role_ids, skip
-        if any(role.id in role_ids for role in message.author.roles):
+        if any(role.id in role_ids for role in member.roles):
             return
 
         if 'interaction' in guild_config['triggers']:
