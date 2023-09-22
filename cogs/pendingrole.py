@@ -30,6 +30,12 @@ class PendingRole(Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        if message.guild is None:
+            return
+
         guild_config = get_guild_config(message.guild.id, 'pendingrole')
         if guild_config is None:
             return
