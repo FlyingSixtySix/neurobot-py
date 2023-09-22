@@ -1,3 +1,7 @@
+from typing import Callable
+from pytimeparse import parse as parsetime
+from datetime import datetime
+
 import discord
 from discord.ext import bridge, commands
 from loguru import logger
@@ -8,6 +12,114 @@ from utils import get_guild_config
 
 
 class ModUtils(Cog):
+    @bridge.bridge_group(invoke_without_commands=False, guild_ids=command_guild_ids)
+    @bridge.has_permissions(manage_messages=True)
+    async def embedban(self, ctx: bridge.BridgeContext):
+        pass
+
+    @embedban.command()
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('user', description='The name or ID of the user to embed ban', required=True)
+    # @discord.option('duration', description='The duration to persist the embed ban')
+    async def add(self, ctx: bridge.BridgeExtContext, user: str):
+        guild_config = get_guild_config(ctx.guild.id, 'modutils')
+        if guild_config is None:
+            await ctx.respond('This guild does not have a configuration for this command.', ephemeral=True)
+            return
+
+        embedban_role_id = int(guild_config['embedban_role'])
+        role = ctx.guild.get_role(embedban_role_id)
+
+        # Parse input user ID
+        if user.isnumeric():
+            member = ctx.guild.get_member(user)
+        elif user.startswith('<@') and user.endswith('>'):
+            member = ctx.guild.get_member(int(user[2:-1]))
+        else:
+            member_lambda: Callable[[discord.Member], bool] = (lambda m:
+                                                               (user.lower() in m.name.lower()) or
+                                                               (user.lower() in m.display_name.lower()))
+            members = list(filter(member_lambda, ctx.guild.members))
+            if len(members) == 0:
+                await ctx.respond('No users found by that name')
+                return
+            else:
+                member = members[0]
+
+        # If member is already embed banned, skip
+        if role in member.roles:
+            await ctx.respond(f'{member} is already embed banned; to update, remove and re-issue the embed ban')
+            return
+
+        # TODO: Add duration support
+        #
+        # expiry_datetime = None
+        #
+        # if duration is not None:
+        #     duration_seconds = parsetime(duration)
+        #     now = datetime.now().timestamp()
+        #     expiry = now + duration_seconds
+        #     expiry_datetime = datetime.fromtimestamp(expiry)
+
+        logger.debug(f'Adding embed ban role {embedban_role_id} for {member}')
+        await member.add_roles(role, reason=f'Embed banned by {ctx.author}')
+        await ctx.respond(f'Embed ban issued for {member}')
+
+    @embedban.command()
+    @bridge.has_permissions(manage_messages=True)
+    @discord.option('user', description='The name or ID of the user to remove embed ban from', required=True)
+    async def remove(self, ctx: bridge.BridgeExtContext, user: str):
+        guild_config = get_guild_config(ctx.guild.id, 'modutils')
+        if guild_config is None:
+            await ctx.respond('This guild does not have a configuration for this command.', ephemeral=True)
+            return
+
+        embedban_role_id = int(guild_config['embedban_role'])
+        role = ctx.guild.get_role(embedban_role_id)
+
+        # Parse input user ID
+        if user.isnumeric():
+            member = ctx.guild.get_member(user)
+        elif user.startswith('<@') and user.endswith('>'):
+            member = ctx.guild.get_member(int(user[2:-1]))
+        else:
+            member_lambda: Callable[[discord.Member], bool] = (lambda m:
+                                                               (user.lower() in m.name.lower()) or
+                                                               (user.lower() in m.display_name.lower()))
+            members = list(filter(member_lambda, ctx.guild.members))
+            if len(members) == 0:
+                await ctx.respond('No users found by that name')
+                return
+            else:
+                member = members[0]
+
+        # If member is not embed banned, skip
+        if role not in member.roles:
+            await ctx.respond(f'{member} is not embed banned')
+            return
+
+        logger.debug(f'Removing embed ban role {embedban_role_id} from {member}')
+        await member.remove_roles(role, reason=f'Embed ban removed by {ctx.author}')
+        await ctx.respond(f'Embed ban removed from {member}')
+
+    @embedban.command()
+    @bridge.has_permissions(manage_messages=True)
+    async def list(self, ctx: bridge.BridgeExtContext):
+        guild_config = get_guild_config(ctx.guild.id, 'modutils')
+        if guild_config is None:
+            await ctx.respond('This guild does not have a configuration for this command.', ephemeral=True)
+            return
+
+        embedban_role_id = int(guild_config['embedban_role'])
+        role = ctx.guild.get_role(embedban_role_id)
+
+        members = [member for member in ctx.guild.members if role in member.roles]
+        if len(members) == 0:
+            await ctx.respond('No embed banned users')
+            return
+
+        await ctx.respond(f'Embed banned users: {", ".join([f"{member.mention} (`{member.id}`)" for member in members])}')
+
     @commands.message_command(name='Log Information', guild_ids=command_guild_ids)
     async def log_information(self, ctx: discord.ApplicationContext, message: discord.Message):
         guild_config = get_guild_config(message.guild.id, 'modutils')
