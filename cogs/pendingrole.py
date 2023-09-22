@@ -40,7 +40,7 @@ class PendingRole(Cog):
         member = message.author
         if not isinstance(message.author, discord.Member):
             logger.debug(f'Message author is not a member')
-            member = message.guild.get_member(message.author.id)
+            member = await message.guild.fetch_member(message.author.id)
 
         # if author has any of the roles in role_ids, skip
         if any(role.id in role_ids for role in member.roles):
