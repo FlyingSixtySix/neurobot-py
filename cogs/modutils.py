@@ -1,6 +1,4 @@
 from typing import Callable
-from pytimeparse import parse as parsetime
-from datetime import datetime
 
 import discord
 from discord.ext import bridge, commands
