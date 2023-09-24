@@ -30,7 +30,7 @@ class ModUtils(Cog):
 
         # Parse input user ID
         if user.isnumeric():
-            member = ctx.guild.get_member(user)
+            member = ctx.guild.get_member(int(user))
         elif user.startswith('<@') and user.endswith('>'):
             member = ctx.guild.get_member(int(user[2:-1]))
         else:
@@ -77,7 +77,7 @@ class ModUtils(Cog):
 
         # Parse input user ID
         if user.isnumeric():
-            member = ctx.guild.get_member(user)
+            member = ctx.guild.get_member(int(user))
         elif user.startswith('<@') and user.endswith('>'):
             member = ctx.guild.get_member(int(user[2:-1]))
         else:
