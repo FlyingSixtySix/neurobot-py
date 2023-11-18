@@ -50,7 +50,6 @@ class Reactions(Cog):
     def __init__(self, bot: bridge.Bot):
         super().__init__(bot)
         # TABLE: reactions
-        # nth = which reaction of this type it was (first = 1, second = 2, etc.)
         cur = self.con.cursor()
         cur.execute('''
             CREATE TABLE IF NOT EXISTS reactions (
@@ -60,10 +59,10 @@ class Reactions(Cog):
                 user_id INTEGER NOT NULL,
                 emoji TEXT NOT NULL,
                 removed INTEGER DEFAULT 0,
-                nth INTEGER NOT NULL,
                 time INTEGER NOT NULL,
                 hit_groups TEXT,
-                PRIMARY KEY (message_id, channel_id, guild_id, emoji, time)
+                duplicates INTEGER DEFAULT 0,
+                UNIQUE (message_id, emoji)
             );
         ''')
         # TABLE: reaction_groups
@@ -100,43 +99,11 @@ class Reactions(Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        try:
-            message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
-        except discord.NotFound:
-            logger.error(f'Could not find message {payload.message_id} in channel {payload.channel_id}')
-            return
         emoji = str(payload.emoji)
-        removed = 0
-
-        same_reaction = [r for r in message.reactions if str(r.emoji) == emoji]
-
-        cur = self.con.cursor()
-
-        cur.execute('''
-            SELECT nth
-            FROM reactions
-            WHERE message_id = ? AND channel_id = ? AND guild_id = ? AND emoji = ?
-        ''', (payload.message_id, payload.channel_id, payload.guild_id, emoji))
-        rows = cur.fetchall()
-
-        # If the user spam reacts/unreacts, the message cache doesn't have the
-        # reaction yet, so assume its nth based on what we already have
-        if len(same_reaction) == 0:
-            if len(rows) == 0:
-                nth = 1
-            else:
-                nth = len(rows) + 1
-            logger.error(f'No reactions found for {emoji} on message {message.id}; assuming nth is {nth}')
-        else:
-            if len(rows) == same_reaction[0].count:
-                nth = len(rows) + 1
-            else:
-                nth = same_reaction[0].count
-
         now = time.time_ns() // 1_000_000
-
         skip_removal = False
 
+        cur = self.con.cursor()
         # Find any whitelists/blacklists that apply to this channel
         cur.execute('''
             SELECT name, type, channel_ids
@@ -178,10 +145,12 @@ class Reactions(Cog):
                     hit_groups.append((name, enabled))
         # If any hit groups are enabled, remove the reaction, and keep track of which group hit first
         first_hit_group = None
+        removed = 0
         for (name, enabled) in hit_groups:
             first_hit_group = name
             if enabled and not skip_removal:
                 try:
+                    message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
                     await message.remove_reaction(payload.emoji, payload.member)
                     removed = Reactions.REACTION_REMOVED_BOT
                 except discord.Forbidden:
@@ -189,9 +158,9 @@ class Reactions(Cog):
                 break
         hit_groups_str = ','.join((f'{name}::{enabled}' if name != first_hit_group else f'{name}::*') for (name, enabled) in hit_groups)
         self.con.execute('''
-            INSERT INTO reactions (message_id, channel_id, guild_id, user_id, emoji, removed, nth, time, hit_groups)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (payload.message_id, payload.channel_id, payload.guild_id, payload.user_id, emoji, removed, nth, now, hit_groups_str))
+            INSERT INTO reactions (message_id, channel_id, guild_id, user_id, emoji, removed, time, hit_groups)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (payload.message_id, payload.channel_id, payload.guild_id, payload.user_id, emoji, removed, now, hit_groups_str))
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
@@ -442,7 +411,7 @@ class Reactions(Cog):
         query = '''
             SELECT emoji, user_id, time, channel_id
             FROM reactions
-            WHERE message_id = ? AND guild_id = ? AND nth = 1
+            WHERE message_id = ? AND guild_id = ?
         '''
         params = (message_id, ctx.guild.id)
 
