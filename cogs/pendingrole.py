@@ -1,5 +1,5 @@
-import discord
-from discord.ext import bridge, commands
+import disnake
+from disnake.ext import commands
 from loguru import logger
 
 from main import command_guild_ids
@@ -11,7 +11,7 @@ class PendingRole(Cog):
     manually_processing = []
 
     @commands.Cog.listener()
-    async def on_member_update(self, before: discord.Member, after: discord.Member):
+    async def on_member_update(self, before: disnake.Member, after: disnake.Member):
         guild_config = get_guild_config(after.guild.id, 'pendingrole')
         if guild_config is None:
             return
@@ -29,7 +29,7 @@ class PendingRole(Cog):
             await after.add_roles(*roles, reason='[rules] User no longer pending rule verification')
 
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
+    async def on_message(self, message: disnake.Message):
         if message.author.bot:
             return
 
@@ -44,7 +44,7 @@ class PendingRole(Cog):
         roles = [message.guild.get_role(role_id) for role_id in role_ids]
 
         member = message.author
-        if not isinstance(message.author, discord.Member):
+        if not isinstance(message.author, disnake.Member):
             logger.debug(f'Message author is not a member: {message.author}')
             member = await message.guild.fetch_member(message.author.id)
 
@@ -57,7 +57,8 @@ class PendingRole(Cog):
             await message.author.add_roles(*roles, reason='[interaction/message] User no longer pending rule verification')
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    async def on_voice_state_update(self,
+                                    member: disnake.Member, before: disnake.VoiceState, after: disnake.VoiceState):
         guild_config = get_guild_config(member.guild.id, 'pendingrole')
         if guild_config is None:
             return
@@ -73,18 +74,18 @@ class PendingRole(Cog):
             logger.debug(f'Adding roles {", ".join(str(x) for x in role_ids)} to {member.display_name}')
             await member.add_roles(*roles, reason='[interaction/voice] User no longer pending rule verification')
 
-    @bridge.bridge_group(invoke_without_command=False, aliases=['pr'], guild_ids=command_guild_ids)
-    async def pendingrole(self, ctx: bridge.BridgeContext):
+    @commands.slash_command(invoke_without_command=False, aliases=['pr'], guild_ids=command_guild_ids)
+    async def pendingrole(self, ctx: disnake.ApplicationCommandInteraction):
         pass
 
-    @pendingrole.command()
-    @bridge.has_permissions(manage_messages=True)
-    async def manual(self, ctx: bridge.BridgeExtContext | discord.ApplicationContext):
+    @pendingrole.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def manual(self, ctx: disnake.ApplicationCommandInteraction):
         """
         Manually verifies all rule-verified users
         """
         if ctx.guild.id in self.manually_processing:
-            await ctx.respond('Already processing members, please wait...', ephemeral=True)
+            await ctx.send('Already processing members, please wait...', ephemeral=True)
             return
 
         guild_config = get_guild_config(ctx.guild.id, 'pendingrole')
@@ -94,7 +95,7 @@ class PendingRole(Cog):
         role_ids = guild_config['roles']
         roles = [ctx.guild.get_role(role_id) for role_id in role_ids]
 
-        await ctx.respond('Processing verified members...')
+        await ctx.send('Processing verified members...')
         self.manually_processing.append(ctx.guild.id)
 
         members = await ctx.guild.fetch_members(limit=None).flatten()
@@ -113,13 +114,13 @@ class PendingRole(Cog):
             await member.add_roles(*roles, reason='[Manual] User no longer pending rule verification')
             count += 1
 
-        if isinstance(ctx, bridge.BridgeExtContext):
-            await ctx.respond(f'Finished verifying members; {count} updated')
+        if isinstance(ctx, disnake.ApplicationCommandInteraction):
+            await ctx.send(f'Finished verifying members; {count} updated')
         else:
             await ctx.followup.send(f'Finished verifying members; {count} updated')
 
         self.manually_processing.remove(ctx.guild.id)
 
 
-def setup(bot: bridge.Bot):
+def setup(bot: commands.Bot):
     bot.add_cog(PendingRole(bot))

@@ -1,8 +1,8 @@
 import sys
 import tomllib
 
-import discord
-from discord.ext import bridge, commands
+import disnake
+from disnake.ext import commands
 from loguru import logger
 
 with open('config.toml', 'rb') as file:
@@ -13,18 +13,18 @@ command_guild_ids = [int(id) for id in config['bot']['guilds']]
 logger.remove()
 logger.add(sys.stderr, level=config['bot']['log_level'].upper())
 
-intents = discord.Intents.default()
+intents = disnake.Intents.default()
 intents.members = True
 intents.messages = True
 intents.message_content = True
 intents.guilds = True
 intents.reactions = True
 
-bot = bridge.Bot(
+bot = commands.Bot(
     intents=intents,
     command_prefix=config['bot']['prefix'],
     help_command=None,
-    allowed_mentions=discord.AllowedMentions.none())
+    allowed_mentions=disnake.AllowedMentions.none())
 
 @bot.event
 async def on_ready():
@@ -32,12 +32,12 @@ async def on_ready():
 
 
 @bot.event
-async def on_command_error(ctx: bridge.Context, error: Exception):
+async def on_command_error(ctx: commands.Context, error: commands.CommandError):
     if isinstance(error, commands.CommandNotFound):
         return
     else:
-        await ctx.respond(f'Error: {error}')
+        await ctx.reply(f'Error: {error}')
 
-bot.load_extension('cogs', recursive=True)
+bot.load_extensions('cogs')
 
 sys.exit(bot.run(config['bot']['token']))

@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 loguru = "0.7.0"
 requests = "2.31.0"
-py-cord = {git = "https://github.com/Pycord-Development/pycord"}
+disnake = "2.9.1"
 
 [dev-packages]
 

@@ -1,9 +1,10 @@
 import json
 import re
 import sqlite3
+from typing import Any
 
-import discord
-from discord.ext import bridge, commands
+import disnake
+from disnake.ext import commands
 from loguru import logger
 import requests
 
@@ -18,7 +19,7 @@ class JP(Cog):
     con = sqlite3.connect('neurobot.db')
     con.isolation_level = None
 
-    def __init__(self, bot: bridge.Bot):
+    def __init__(self, bot: commands.Bot):
         super().__init__(bot)
         # TABLE: jp_translations
         cur = self.con.cursor()
@@ -32,7 +33,7 @@ class JP(Cog):
         cur.close()
 
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
+    async def on_message(self, message: disnake.Message):
         if message.author.bot:
             return
 
@@ -67,14 +68,14 @@ class JP(Cog):
             VALUES (?)
         ''', (message.id,))
 
-        translated = self.translate(message.content)
+        translated = translate(message.content)
         if translated is None:
             cur.close()
             return
 
         description = 'via DeepL | [Jump to message](' + message.jump_url + ')'
 
-        embed = discord.Embed(
+        embed = disnake.Embed(
             description=description,
             color=0xAA8ED6,
             timestamp=message.created_at
@@ -96,7 +97,7 @@ class JP(Cog):
         cur.close()
 
     @commands.Cog.listener()
-    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+    async def on_message_edit(self, before: disnake.Message, after: disnake.Message):
         if before.author.bot:
             return
 
@@ -130,7 +131,7 @@ class JP(Cog):
         if translated_message is None:
             return
 
-        translated = self.translate(after.content)
+        translated = translate(after.content)
         if translated is None:
             cur.close()
             return
@@ -146,26 +147,27 @@ class JP(Cog):
         embed.set_footer(text=f'Edited {edit_count + 1}x')
         await translated_message.edit(embed=embed)
 
-    def translate(self, text) -> str:
-        body = {
-            'source_lang': 'JA',
-            'target_lang': 'EN-US',
-            'text': [text]
-        }
-        body_enc = json.dumps(body)
 
-        r = requests.post('https://api-free.deepl.com/v2/translate', data=body_enc, headers={
-            'Authorization': 'DeepL-Auth-Key ' + deepl_api_key,
-            'Content-Type': 'application/json',
-            'Content-Length': str(len(body_enc))
-        })
-        if r.status_code != 200:
-            logger.error('Deepl returned status code {code}', code=r.status_code)
-            logger.error(r.text)
-            return
+def translate(text) -> Any | None:
+    body = {
+        'source_lang': 'JA',
+        'target_lang': 'EN-US',
+        'text': [text]
+    }
+    body_enc = json.dumps(body)
 
-        return r.json()['translations'][0]['text']
+    r = requests.post('https://api-free.deepl.com/v2/translate', data=body_enc, headers={
+        'Authorization': 'DeepL-Auth-Key ' + deepl_api_key,
+        'Content-Type': 'application/json',
+        'Content-Length': str(len(body_enc))
+    })
+    if r.status_code != 200:
+        logger.error('Deepl returned status code {code}', code=r.status_code)
+        logger.error(r.text)
+        return
+
+    return r.json()['translations'][0]['text']
 
 
-def setup(bot: bridge.Bot):
+def setup(bot: commands.Bot):
     bot.add_cog(JP(bot))

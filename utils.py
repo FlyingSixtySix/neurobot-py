@@ -1,5 +1,6 @@
 from main import config
 
+
 def get_guild_config(guild_id: int, cog: str) -> dict or None:
     """
     Returns the config for the given guild and cog.
@@ -9,6 +10,7 @@ def get_guild_config(guild_id: int, cog: str) -> dict or None:
     if str(guild_id) not in config[cog]:
         return None
     return config[cog][str(guild_id)]
+
 
 def get_dual_timestamps(timestamp: str) -> str:
     """

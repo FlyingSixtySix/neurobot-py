@@ -3,34 +3,14 @@ import sqlite3
 import time
 from typing import Callable
 
-import discord
-from discord.ext import bridge, commands
+import disnake
+from disnake.ext import commands
 from loguru import logger
 
 from main import command_guild_ids, config
 from cog import Cog
 
 silent = config['reactions']['silent']
-
-
-async def get_group_names(ctx: discord.AutocompleteContext, builtin: bool = True):
-    """
-    Slash command autocomplete for reaction group names
-    """
-    cur = Reactions.con.cursor()
-    cur.execute('''
-        SELECT name, builtin
-        FROM reaction_groups
-        WHERE guild_id = ?
-    ''', (ctx.interaction.guild_id,))
-    names = []
-    for row in cur.fetchall():
-        if not builtin and row[1] == 1:
-            continue
-        name = row[0] + (' (built-in)' if row[1] == 1 else '')
-        names.append(name)
-    cur.close()
-    return names
 
 
 class Reactions(Cog):
@@ -47,7 +27,7 @@ class Reactions(Cog):
     CHANNEL_LIST_TYPE_WHITELIST = 0
     CHANNEL_LIST_TYPE_BLACKLIST = 1
 
-    def __init__(self, bot: bridge.Bot):
+    def __init__(self, bot: commands.Bot):
         super().__init__(bot)
         # TABLE: reactions
         # nth = which reaction of this type it was (first = 1, second = 2, etc.)
@@ -99,10 +79,10 @@ class Reactions(Cog):
         cur.close()
 
     @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+    async def on_raw_reaction_add(self, payload: disnake.RawReactionActionEvent):
         try:
             message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
-        except discord.NotFound:
+        except disnake.NotFound:
             logger.error(f'Could not find message {payload.message_id} in channel {payload.channel_id}')
             return
         emoji = str(payload.emoji)
@@ -184,7 +164,7 @@ class Reactions(Cog):
                 try:
                     await message.remove_reaction(payload.emoji, payload.member)
                     removed = Reactions.REACTION_REMOVED_BOT
-                except discord.Forbidden:
+                except disnake.Forbidden:
                     removed = Reactions.REACTION_REMOVED_FAILED
                 break
         hit_groups_str = ','.join((f'{name}::{enabled}' if name != first_hit_group else f'{name}::*') for (name, enabled) in hit_groups)
@@ -194,7 +174,7 @@ class Reactions(Cog):
         ''', (payload.message_id, payload.channel_id, payload.guild_id, payload.user_id, emoji, removed, nth, now, hit_groups_str))
 
     @commands.Cog.listener()
-    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+    async def on_raw_reaction_remove(self, payload: disnake.RawReactionActionEvent):
         emoji = str(payload.emoji)
         self.con.execute('''
             UPDATE reactions
@@ -224,19 +204,19 @@ class Reactions(Cog):
             raise ValueError(f'Invalid match type integer: {match_type}')
 
     def _format_reaction_group(self, name: str, match: str, match_type: str, enabled: bool, builtin: bool):
-        return f'Name: `{name}`\nMatch: `{match}`\nEnabled: {"Yes" if enabled else "No"}\nBuilt-in: {"Yes" if builtin else "No"}\nType: `{self._int_to_match_type(match_type)}`'
+        return f'Name: `{name}`\nMatch: `{match}`\nEnabled: {"Yes" if enabled else "No"}\nBuilt-in: {"Yes" if builtin else "No"}\nType: `{match_type}`'
 
-    @bridge.bridge_group(invoke_without_command=False, aliases=['rg'], guild_ids=command_guild_ids)
-    async def reactiongroups(self, ctx: bridge.BridgeContext):
+    @commands.slash_command(invoke_without_command=False, aliases=['rg'], guild_ids=command_guild_ids)
+    async def reactiongroups(self, ctx: disnake.ApplicationCommandInteraction):
         pass
 
-    @bridge.bridge_group(invoke_without_command=False, aliases=['r'], guild_ids=command_guild_ids)
-    async def reactions(self, ctx: bridge.BridgeContext):
+    @commands.slash_command(invoke_without_command=False, aliases=['r'], guild_ids=command_guild_ids)
+    async def reactions(self, ctx: disnake.ApplicationCommandInteraction):
         pass
 
-    @reactiongroups.command()
-    @bridge.has_permissions(manage_messages=True)
-    async def list(self, ctx: bridge.BridgeExtContext):
+    @reactiongroups.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def list(self, ctx: disnake.ApplicationCommandInteraction):
         """
         List all reaction groups
         """
@@ -251,12 +231,16 @@ class Reactions(Cog):
             name = row[0] + (' (enabled)' if row[1] else ' (disabled)') + (' (built-in)' if row[2] == 1 else '')
             names.append(name)
         cur.close()
-        await ctx.respond(self._format_reaction_groups(names), ephemeral=silent)
+        await ctx.send(self._format_reaction_groups(names), ephemeral=silent)
 
-    @reactiongroups.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(get_group_names))
-    async def info(self, ctx: bridge.BridgeExtContext, *, name: str):
+    @reactiongroups.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def info(self,
+                   ctx: disnake.ApplicationCommandInteraction,
+                   *,
+                   name: str = commands.Param(
+                       name='name',
+                       description='The name of the reaction group')):
         """
         View information about a reaction group
         """
@@ -269,15 +253,23 @@ class Reactions(Cog):
         ''', (ctx.guild.id, name.lower()))
         match = cur.fetchone()
         if match is None:
-            await ctx.respond(f'Reaction group `{name}` not found', ephemeral=silent)
+            await ctx.send(f'Reaction group `{name}` not found', ephemeral=silent)
             return
         cur.close()
-        await ctx.respond(self._format_reaction_group(match[0], match[1], match[2], match[3], match[4]), ephemeral=silent)
+        await ctx.send(self._format_reaction_group(match[0], match[1], match[2], match[3], match[4]), ephemeral=silent)
 
-    @reactiongroups.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(get_group_names))
-    async def enable(self, ctx: bridge.BridgeExtContext, *, name: str):
+    @info.autocomplete('name')
+    async def _info_name_autocomplete(self, ctx: disnake.ApplicationCommandInteraction, name: str):
+        return await self.get_group_names(ctx.guild_id, True)
+
+    @reactiongroups.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def enable(self,
+                     ctx: disnake.ApplicationCommandInteraction,
+                     *,
+                     name: str = commands.Param(
+                         name='name',
+                         description='The name of the reaction group')):
         """
         Enable a reaction group
         """
@@ -291,7 +283,7 @@ class Reactions(Cog):
         ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is None:
-            await ctx.respond(f'Reaction group `{name}` does not exist', ephemeral=silent)
+            await ctx.send(f'Reaction group `{name}` does not exist', ephemeral=silent)
             return
         # Group exists; we can enable
         self.con.execute('''
@@ -299,12 +291,20 @@ class Reactions(Cog):
             SET enabled = 1
             WHERE guild_id = ? AND LOWER(name) = ?
         ''', (ctx.guild.id, name.lower()))
-        await ctx.respond(f'Reaction group `{name}` enabled', ephemeral=silent)
+        await ctx.send(f'Reaction group `{name}` enabled', ephemeral=silent)
 
-    @reactiongroups.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(get_group_names))
-    async def disable(self, ctx: bridge.BridgeExtContext, *, name: str):
+    @enable.autocomplete('name')
+    async def _enable_name_autocomplete(self, ctx: disnake.ApplicationCommandInteraction, name: str):
+        return await self.get_group_names(ctx.guild_id, True)
+
+    @reactiongroups.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def disable(self,
+                      ctx: disnake.ApplicationCommandInteraction,
+                      *,
+                      name: str = commands.Param(
+                          name='name',
+                          description='The name of the reaction group')):
         """
         Disable a reaction group
         """
@@ -318,7 +318,7 @@ class Reactions(Cog):
         ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is None:
-            await ctx.respond(f'Reaction group `{name}` does not exist', ephemeral=silent)
+            await ctx.send(f'Reaction group `{name}` does not exist', ephemeral=silent)
             return
         # Group exists; we can disable
         self.con.execute('''
@@ -326,14 +326,26 @@ class Reactions(Cog):
             SET enabled = 0
             WHERE guild_id = ? AND LOWER(name) = ?
         ''', (ctx.guild.id, name.lower()))
-        await ctx.respond(f'Reaction group `{name}` disabled', ephemeral=silent)
+        await ctx.send(f'Reaction group `{name}` disabled', ephemeral=silent)
 
-    @reactiongroups.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('name', description='The name of the reaction group', required=True)
-    @discord.option('match', description='The regex to match against', required=True)
-    @discord.option('match_type', description='The type of match to use', required=True, choices=['substring', 'exact'])
-    async def add(self, ctx: bridge.BridgeExtContext, name: str, match: str, match_type: str):
+    @disable.autocomplete('name')
+    async def _disable_name_autocomplete(self, ctx: disnake.ApplicationCommandInteraction, name: str):
+        return await self.get_group_names(ctx.guild_id, True)
+
+    @reactiongroups.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def add(self,
+                  ctx: disnake.ApplicationCommandInteraction,
+                  name: str = commands.Param(
+                      name='name',
+                      description='The name of the reaction group'),
+                  match: str = commands.Param(
+                      name='match',
+                      description='The regex to match against'),
+                  match_type: str = commands.Param(
+                      name='match_type',
+                      description='The type of match to use',
+                      choices=['substring', 'exact'])):
         """
         Add a reaction group
         """
@@ -347,7 +359,7 @@ class Reactions(Cog):
         ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is not None:
-            await ctx.respond(f'Reaction group `{name}` already exists', ephemeral=silent)
+            await ctx.send(f'Reaction group `{name}` already exists', ephemeral=silent)
             return
         # Group doesn't exist; we can add
         cur.execute('''
@@ -355,14 +367,22 @@ class Reactions(Cog):
             VALUES (?, ?, ?, ?)
         ''', (ctx.guild.id, name, match, self._match_type_to_int(match_type)))
         cur.close()
-        await ctx.respond(f'Reaction group `{name}` added with match `{match}`', ephemeral=silent)
+        await ctx.send(f'Reaction group `{name}` added with match `{match}`', ephemeral=silent)
 
-    @reactiongroups.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(lambda i: get_group_names(i, False)))
-    @discord.option('match', description='The regex to match against', required=True)
-    @discord.option('match_type', description='The type of match to use', required=True, choices=['substring', 'exact'])
-    async def edit(self, ctx: bridge.BridgeExtContext, name: str, match: str, match_type: str):
+    @reactiongroups.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def edit(self,
+                   ctx: disnake.ApplicationCommandInteraction,
+                   name: str = commands.Param(
+                       name='name',
+                       description='The name of the reaction group'),
+                   match: str = commands.Param(
+                       name='match',
+                       description='The regex to match against'),
+                   match_type: str = commands.Param(
+                       name='match_type',
+                       description='The type of match to use',
+                       choices=['substring', 'exact'])):
         """
         Edit a reaction group
         """
@@ -376,10 +396,10 @@ class Reactions(Cog):
         ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is None:
-            await ctx.respond(f'Reaction group `{name}` not found', ephemeral=silent)
+            await ctx.send(f'Reaction group `{name}` not found', ephemeral=silent)
             return
         if group[0]:
-            await ctx.respond(f'Cannot edit built-in reaction group `{name}`', ephemeral=silent)
+            await ctx.send(f'Cannot edit built-in reaction group `{name}`', ephemeral=silent)
             return
         # Group exists and isn't built-in; we can edit
         cur.execute('''
@@ -388,12 +408,20 @@ class Reactions(Cog):
             WHERE guild_id = ? AND LOWER(name) = ?
         ''', (match, self._match_type_to_int(match_type), ctx.guild.id, name.lower()))
         cur.close()
-        await ctx.respond(f'Reaction group `{name}` edited with new match `{match}`', ephemeral=silent)
+        await ctx.send(f'Reaction group `{name}` edited with new match `{match}`', ephemeral=silent)
 
-    @reactiongroups.command(aliases=['delete'])
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('name', description='The name of the reaction group', required=True, autocomplete=discord.utils.basic_autocomplete(lambda i: get_group_names(i, False)))
-    async def remove(self, ctx: bridge.BridgeExtContext, *, name: str):
+    @edit.autocomplete('name')
+    async def _edit_name_autocomplete(self, ctx: disnake.ApplicationCommandInteraction, name: str):
+        return await self.get_group_names(ctx.guild_id, False)
+
+    @reactiongroups.sub_command(aliases=['delete'])
+    @commands.has_permissions(manage_messages=True)
+    async def remove(self,
+                     ctx: disnake.ApplicationCommandInteraction,
+                     *,
+                     name: str = commands.Param(
+                         name='name',
+                         description='The name of the reaction group')):
         """
         Remove a reaction group
         """
@@ -407,10 +435,10 @@ class Reactions(Cog):
         ''', (ctx.guild.id, name.lower()))
         group = cur.fetchone()
         if group is None:
-            await ctx.respond(f'Reaction group `{name}` not found.', ephemeral=silent)
+            await ctx.send(f'Reaction group `{name}` not found.', ephemeral=silent)
             return
         if group[0]:
-            await ctx.respond(f'Cannot remove built-in reaction group `{name}`', ephemeral=silent)
+            await ctx.send(f'Cannot remove built-in reaction group `{name}`', ephemeral=silent)
             return
         # Group exists and isn't built-in; we can remove
         cur.execute('''
@@ -418,23 +446,35 @@ class Reactions(Cog):
             WHERE guild_id = ? AND LOWER(name) = ?
         ''', (ctx.guild.id, name.lower()))
         cur.close()
-        await ctx.respond(f'Reaction group `{name}` removed', ephemeral=silent)
+        await ctx.send(f'Reaction group `{name}` removed', ephemeral=silent)
 
-    @reactions.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('message_input', description='A link or ID of the message', required=True)
-    @discord.option('emoji', description='The name of the emoji to filter by', required=False)
-    @discord.option('user', description='The name or ID of the user to filter by', required=False)
-    async def first(self, ctx: bridge.BridgeExtContext | discord.ApplicationContext, message_input: str, filter_emoji: str = None, filter_user: str = None):
+    @remove.autocomplete('name')
+    async def _remove_name_autocomplete(self, ctx: disnake.ApplicationCommandInteraction, name: str):
+        return await self.get_group_names(ctx.guild_id, False)
+
+    @reactions.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def first(self,
+                    ctx: disnake.ApplicationCommandInteraction,
+                    message_input: str = commands.Param(
+                        name='message_input',
+                        description='A link or ID of the message'),
+                    filter_emoji: str = commands.Param(
+                        None,
+                        name='emoji',
+                        description='The name of the emoji to filter by'),
+                    filter_user: str = commands.Param(
+                        None,
+                        name='user',
+                        description='The name or ID of the user to filter by')):
         """
         View who reacted to a message first
         """
-
         if 'http' in message_input:
             message_id = int(message_input.split('/')[-1])
         else:
             if not message_input.isnumeric():
-                await ctx.respond('Invalid message input', ephemeral=silent)
+                await ctx.send('Invalid message input', ephemeral=silent)
                 return
             message_id = int(message_input)
 
@@ -455,12 +495,12 @@ class Reactions(Cog):
                 query += ' AND user_id = ?'
                 params += (int(filter_user),)
             else:
-                member_lambda: Callable[[discord.Member], bool] = (lambda m:
+                member_lambda: Callable[[disnake.Member], bool] = (lambda m:
                                       (filter_user.lower() in m.name.lower()) or
                                       (filter_user.lower() in m.display_name.lower()))
                 members = list(filter(member_lambda, ctx.guild.members))
                 if len(members) == 0:
-                    await ctx.respond('No users found by that filter', ephemeral=silent)
+                    await ctx.send('No users found by that filter', ephemeral=silent)
                     return
                 elif len(members) > 1:
                     query += 'AND user_id IN ('
@@ -477,7 +517,7 @@ class Reactions(Cog):
         cur.execute(query, params)
         reactions = cur.fetchall()
         if len(reactions) == 0:
-            await ctx.respond('No reactions found', ephemeral=silent)
+            await ctx.send('No reactions found', ephemeral=silent)
             return
 
         # getting the channel ID from any reaction should work
@@ -541,25 +581,44 @@ class Reactions(Cog):
             buffer += f' by {user.mention}' + (f' (**{len(same_reactions)}x**)' if len(same_reactions) > 1 else '') + '\n'
 
             if len(description) + len(buffer) > 4096:
-                embed = discord.Embed(title=title, description=description, color=color)
+                embed = disnake.Embed(title=title, description=description, color=color)
 
-                await ctx.respond(embed=embed)
+                await ctx.send(embed=embed)
 
                 description = f'{link_to_message}\n\n'
                 followup = True
 
             description += buffer
 
-        embed = discord.Embed(title=title, description=description, color=color)
+        embed = disnake.Embed(title=title, description=description, color=color)
 
         if followup:
-            if isinstance(ctx, bridge.BridgeExtContext):
+            if isinstance(ctx, disnake.ApplicationCommandInteraction):
                 await ctx.send(embed=embed)
             else:
                 await ctx.followup.send(embed=embed)
         else:
-            await ctx.respond(embed=embed)
+            await ctx.send(embed=embed)
+
+    async def get_group_names(self, guild_id: int, builtin: bool = True):
+        """
+        Slash command autocomplete for reaction group names
+        """
+        cur = self.con.cursor()
+        cur.execute('''
+            SELECT name, builtin
+            FROM reaction_groups
+            WHERE guild_id = ?
+        ''', (guild_id,))
+        names = []
+        for row in cur.fetchall():
+            if not builtin and row[1] == 1:
+                continue
+            name = row[0] + (' (built-in)' if row[1] == 1 else '')
+            names.append(name)
+        cur.close()
+        return names
 
 
-def setup(bot: bridge.Bot):
+def setup(bot: commands.Bot):
     bot.add_cog(Reactions(bot))

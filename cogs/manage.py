@@ -1,5 +1,5 @@
-import discord
-from discord.ext import bridge
+import disnake
+from disnake.ext import commands
 from loguru import logger
 
 from main import bot, command_guild_ids, config
@@ -8,81 +8,95 @@ from cog import Cog
 silent = config['manage']['silent']
 
 
-async def get_cog_names(ctx: discord.AutocompleteContext):
+async def get_cog_names():
     return [x.lower() for x in bot.cogs]
 
 
 class Manage(Cog):
-    @bridge.bridge_group(invoke_without_command=False, guild_ids=command_guild_ids)
-    @bridge.has_permissions(manage_guild=True)
-    async def manage(self, ctx: bridge.BridgeContext):
+    @commands.slash_command(invoke_without_command=False, guild_ids=command_guild_ids)
+    @commands.has_permissions(manage_guild=True)
+    async def manage(self, ctx: disnake.ApplicationCommandInteraction):
         pass
 
-    @manage.command()
-    @bridge.has_permissions(manage_guild=True)
-    @discord.option('cog', description='The cog to load', required=True)
-    async def load(self, ctx: bridge.BridgeExtContext, cog: str = None):
+    @manage.sub_command()
+    @commands.has_permissions(manage_guild=True)
+    async def load(self,
+                   ctx: disnake.ApplicationCommandInteraction,
+                   cog: str = commands.Param(
+                       name='cog',
+                       description='The cog to load')):
         """
         Load a cog
         """
         cog = cog.lower()
         if cog == 'manage':
-            await ctx.respond('You cannot load the manage cog', ephemeral=silent)
+            await ctx.send('You cannot load the manage cog', ephemeral=silent)
             return
         try:
             bot.load_extension(f'cogs.{cog}')
         except Exception as e:
             logger.error(f'Could not load cog {cog}')
             logger.error(e)
-            await ctx.respond(f'Cog `{cog}` could not be loaded', ephemeral=silent)
+            await ctx.send(f'Cog `{cog}` could not be loaded', ephemeral=silent)
             return
-        await ctx.respond(f'Loaded cog `{cog}`', ephemeral=silent)
+        await ctx.send(f'Loaded cog `{cog}`', ephemeral=silent)
 
-    @manage.command()
-    @bridge.has_permissions(manage_guild=True)
-    @discord.option('cog', description='The cog to unload', required=True, autocomplete=discord.utils.basic_autocomplete(get_cog_names))
-    async def unload(self, ctx: bridge.BridgeExtContext, cog: str = None):
+    @manage.sub_command()
+    @commands.has_permissions(manage_guild=True)
+    async def unload(self,
+                     ctx: disnake.ApplicationCommandInteraction,
+                     cog: str = commands.Param(
+                         name='cog',
+                         description='The cog to unload')):
         """
         Unload a cog
         """
         cog = cog.lower()
         if cog == 'manage':
-            await ctx.respond('You cannot unload the manage cog', ephemeral=silent)
+            await ctx.send('You cannot unload the manage cog', ephemeral=silent)
             return
         if cog not in [x.lower() for x in bot.cogs]:
-            await ctx.respond(f'Cog `{cog}` is not loaded', ephemeral=silent)
+            await ctx.send(f'Cog `{cog}` is not loaded', ephemeral=silent)
             return
         bot.unload_extension(f'cogs.{cog}')
-        await ctx.respond(f'Unloaded cog `{cog}`', ephemeral=silent)
+        await ctx.send(f'Unloaded cog `{cog}`', ephemeral=silent)
 
-    @manage.command()
-    @bridge.has_permissions(manage_guild=True)
-    @discord.option('cog', description='The cog to reload', required=False, autocomplete=discord.utils.basic_autocomplete(get_cog_names))
-    async def reload(self, ctx: bridge.BridgeExtContext, cog: str = None):
+    @manage.sub_command()
+    @commands.has_permissions(manage_guild=True)
+    async def reload(self,
+                     ctx: disnake.ApplicationCommandInteraction,
+                     cog: str = commands.Param(
+                         None,
+                         name='cog',
+                         description='The cog to reload')):
         """
         Reload a cog or all cogs
         """
         if cog:
             if cog not in [x.lower() for x in bot.cogs]:
-                await ctx.respond(f'Cog `{cog}` is not loaded', ephemeral=silent)
+                await ctx.send(f'Cog `{cog}` is not loaded', ephemeral=silent)
                 return
             bot.reload_extension(f'cogs.{cog}')
-            await ctx.respond(f'Reloaded cog `{cog}`', ephemeral=silent)
+            await ctx.send(f'Reloaded cog `{cog}`', ephemeral=silent)
         else:
             cog_names = [x.lower() for x in bot.cogs]
             for cog in cog_names:
                 bot.reload_extension(f'cogs.{cog}')
-            await ctx.respond('Reloaded all cogs', ephemeral=silent)
+            await ctx.send('Reloaded all cogs', ephemeral=silent)
 
-    @manage.command()
-    @bridge.has_permissions(manage_guild=True)
-    async def loaded(self, ctx: bridge.BridgeExtContext):
+    @reload.autocomplete('cog')
+    async def _reload_cog_autocomplete(self, ctx: disnake.ApplicationCommandInteraction):
+        return await get_cog_names()
+
+    @manage.sub_command()
+    @commands.has_permissions(manage_guild=True)
+    async def loaded(self, ctx: disnake.ApplicationCommandInteraction):
         """
         List all loaded cogs
         """
         cog_names = [x.lower() for x in bot.cogs]
-        await ctx.respond(f'Loaded cogs: `{"`, `".join(cog_names)}`', ephemeral=silent)
+        await ctx.send(f'Loaded cogs: `{"`, `".join(cog_names)}`', ephemeral=silent)
 
 
-def setup(bot: bridge.Bot):
+def setup(bot: commands.Bot):
     bot.add_cog(Manage(bot))

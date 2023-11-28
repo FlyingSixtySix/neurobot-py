@@ -1,7 +1,7 @@
 from typing import Callable
 
-import discord
-from discord.ext import bridge, commands
+import disnake
+from disnake.ext import commands
 from loguru import logger
 
 from main import command_guild_ids
@@ -10,19 +10,22 @@ from utils import get_guild_config
 
 
 class ModUtils(Cog):
-    @bridge.bridge_group(invoke_without_commands=False, guild_ids=command_guild_ids)
-    @bridge.has_permissions(manage_messages=True)
-    async def embedban(self, ctx: bridge.BridgeContext):
+    @commands.slash_command(invoke_without_commands=False, guild_ids=command_guild_ids)
+    @commands.has_permissions(manage_messages=True)
+    async def embedban(self, ctx: disnake.ApplicationCommandInteraction):
         pass
 
-    @embedban.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('user', description='The name or ID of the user to embed ban', required=True)
+    @embedban.sub_command()
+    @commands.has_permissions(manage_messages=True)
     # @discord.option('duration', description='The duration to persist the embed ban')
-    async def add(self, ctx: bridge.BridgeExtContext, user: str):
+    async def add(self,
+                  ctx: disnake.ApplicationCommandInteraction,
+                  user: str = commands.Param(
+                      name='user',
+                      description='The name or ID of the user to embed ban')):
         guild_config = get_guild_config(ctx.guild.id, 'modutils')
         if guild_config is None:
-            await ctx.respond('This guild does not have a configuration for this command.', ephemeral=True)
+            await ctx.send('This guild does not have a configuration for this command.', ephemeral=True)
             return
 
         embedban_role_id = int(guild_config['embedban_role'])
@@ -34,19 +37,19 @@ class ModUtils(Cog):
         elif user.startswith('<@') and user.endswith('>'):
             member = ctx.guild.get_member(int(user[2:-1]))
         else:
-            member_lambda: Callable[[discord.Member], bool] = (lambda m:
+            member_lambda: Callable[[disnake.Member], bool] = (lambda m:
                                                                (user.lower() in m.name.lower()) or
                                                                (user.lower() in m.display_name.lower()))
             members = list(filter(member_lambda, ctx.guild.members))
             if len(members) == 0:
-                await ctx.respond('No users found by that name')
+                await ctx.send('No users found by that name')
                 return
             else:
                 member = members[0]
 
         # If member is already embed banned, skip
         if role in member.roles:
-            await ctx.respond(f'{member} is already embed banned; to update, remove and re-issue the embed ban')
+            await ctx.send(f'{member} is already embed banned; to update, remove and re-issue the embed ban')
             return
 
         # TODO: Add duration support
@@ -61,15 +64,18 @@ class ModUtils(Cog):
 
         logger.debug(f'Adding embed ban role {embedban_role_id} for {member}')
         await member.add_roles(role, reason=f'Embed banned by {ctx.author}')
-        await ctx.respond(f'Embed ban issued for {member}')
+        await ctx.send(f'Embed ban issued for {member}')
 
-    @embedban.command()
-    @bridge.has_permissions(manage_messages=True)
-    @discord.option('user', description='The name or ID of the user to remove embed ban from', required=True)
-    async def remove(self, ctx: bridge.BridgeExtContext, user: str):
+    @embedban.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def remove(self,
+                     ctx: disnake.ApplicationCommandInteraction,
+                     user: str = commands.Param(
+                         name='user',
+                         description='The name or ID of the user to remove embed ban from')):
         guild_config = get_guild_config(ctx.guild.id, 'modutils')
         if guild_config is None:
-            await ctx.respond('This guild does not have a configuration for this command.', ephemeral=True)
+            await ctx.send('This guild does not have a configuration for this command.', ephemeral=True)
             return
 
         embedban_role_id = int(guild_config['embedban_role'])
@@ -81,31 +87,31 @@ class ModUtils(Cog):
         elif user.startswith('<@') and user.endswith('>'):
             member = ctx.guild.get_member(int(user[2:-1]))
         else:
-            member_lambda: Callable[[discord.Member], bool] = (lambda m:
+            member_lambda: Callable[[disnake.Member], bool] = (lambda m:
                                                                (user.lower() in m.name.lower()) or
                                                                (user.lower() in m.display_name.lower()))
             members = list(filter(member_lambda, ctx.guild.members))
             if len(members) == 0:
-                await ctx.respond('No users found by that name')
+                await ctx.send('No users found by that name')
                 return
             else:
                 member = members[0]
 
         # If member is not embed banned, skip
         if role not in member.roles:
-            await ctx.respond(f'{member} is not embed banned')
+            await ctx.send(f'{member} is not embed banned')
             return
 
         logger.debug(f'Removing embed ban role {embedban_role_id} from {member}')
         await member.remove_roles(role, reason=f'Embed ban removed by {ctx.author}')
-        await ctx.respond(f'Embed ban removed from {member}')
+        await ctx.send(f'Embed ban removed from {member}')
 
-    @embedban.command()
-    @bridge.has_permissions(manage_messages=True)
-    async def list(self, ctx: bridge.BridgeExtContext):
+    @embedban.sub_command()
+    @commands.has_permissions(manage_messages=True)
+    async def list(self, ctx: disnake.ApplicationCommandInteraction):
         guild_config = get_guild_config(ctx.guild.id, 'modutils')
         if guild_config is None:
-            await ctx.respond('This guild does not have a configuration for this command.', ephemeral=True)
+            await ctx.send('This guild does not have a configuration for this command.', ephemeral=True)
             return
 
         embedban_role_id = int(guild_config['embedban_role'])
@@ -113,13 +119,13 @@ class ModUtils(Cog):
 
         members = [member for member in ctx.guild.members if role in member.roles]
         if len(members) == 0:
-            await ctx.respond('No embed banned users')
+            await ctx.send('No embed banned users')
             return
 
-        await ctx.respond(f'Embed banned users: {", ".join([f"{member.mention} (`{member.id}`)" for member in members])}')
+        await ctx.send(f'Embed banned users: {", ".join([f"{member.mention} (`{member.id}`)" for member in members])}')
 
     @commands.message_command(name='Log Information', guild_ids=command_guild_ids)
-    async def log_information(self, ctx: discord.ApplicationContext, message: discord.Message):
+    async def log_information(self, ctx: disnake.ApplicationCommandInteraction, message: disnake.Message):
         guild_config = get_guild_config(message.guild.id, 'modutils')
         if guild_config is None:
             await ctx.respond('This guild does not have a configuration for this command.', ephemeral=True)
@@ -131,7 +137,7 @@ class ModUtils(Cog):
             logger.error(f'Could not find channel with ID {target_channel_id}')
             return
 
-        embed = discord.Embed(
+        embed = disnake.Embed(
             description=message.content,
             color=0xAA8ED6
         )
@@ -156,5 +162,5 @@ class ModUtils(Cog):
         await ctx.respond(f'Message information sent to <#{target_channel_id}>', ephemeral=True)
 
 
-def setup(bot: bridge.Bot):
+def setup(bot: commands.Bot):
     bot.add_cog(ModUtils(bot))

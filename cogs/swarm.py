@@ -1,5 +1,5 @@
-import discord
-from discord.ext import bridge, commands
+import disnake
+from disnake.ext import commands
 
 from main import command_guild_ids, config
 from cog import Cog
@@ -19,7 +19,7 @@ class Swarm(Cog):
     }
 
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
+    async def on_message(self, message: disnake.Message):
         if message.author.bot:
             return
 
@@ -46,13 +46,13 @@ class Swarm(Cog):
         if state.last_sticker == sticker:
             state.count += 1
             if state.count % 5 == 0:
-                await message.channel.send(f'{state.last_sticker.name} has a streak of {state.count}!', allowed_mentions=discord.AllowedMentions.none())
+                await message.channel.send(f'{state.last_sticker.name} has a streak of {state.count}!', allowed_mentions=disnake.AllowedMentions.none())
         else:
             if state.count >= 5:
-                await message.channel.send(f'{message.author.mention} broke {state.last_sticker.name} streak of {state.count}!', allowed_mentions=discord.AllowedMentions.none())
+                await message.channel.send(f'{message.author.mention} broke {state.last_sticker.name} streak of {state.count}!', allowed_mentions=disnake.AllowedMentions.none())
             state.last_sticker = sticker
             state.count = 1
 
 
-def setup(bot: bridge.Bot):
+def setup(bot: commands.Bot):
     bot.add_cog(Swarm(bot))
