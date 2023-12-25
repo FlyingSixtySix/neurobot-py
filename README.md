@@ -2,6 +2,10 @@
 
 Discord bot for Neuro-sama Headquarters
 
+## Notice
+
+This version is no longer used. Use the JavaScript rewrite of NeuroBot: https://github.com/FlyingSixtySix/neurobot
+
 ## Running
 
 Requirements:
